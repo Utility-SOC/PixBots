@@ -1,0 +1,151 @@
+{
+  "grassland": {
+    "name": "Grassland",
+    "base_color": [
+      50,
+      180,
+      50
+    ],
+    "water_color": [
+      50,
+      100,
+      200
+    ],
+    "mountain_color": [
+      120,
+      120,
+      120
+    ],
+    "obstacle_chance": 0.1,
+    "water_threshold": 0.3,
+    "mountain_threshold": 0.7,
+    "enemy_types": [
+      "enemy_grunt",
+      "enemy_scout"
+    ],
+    "music_theme": "grassland.mid",
+    "obstacle_types": [
+      "Boulder",
+      "Tree"
+    ]
+  },
+  "desert": {
+    "name": "Desert",
+    "base_color": [
+      210,
+      180,
+      140
+    ],
+    "water_color": [
+      90,
+      140,
+      200
+    ],
+    "mountain_color": [
+      180,
+      160,
+      120
+    ],
+    "obstacle_chance": 0.05,
+    "water_threshold": 0.1,
+    "mountain_threshold": 0.8,
+    "enemy_types": [
+      "enemy_scout",
+      "enemy_ambusher"
+    ],
+    "music_theme": "desert.mid",
+    "obstacle_types": [
+      "Boulder",
+      "Cactus"
+    ]
+  },
+  "tundra": {
+    "name": "Tundra",
+    "base_color": [
+      220,
+      220,
+      240
+    ],
+    "water_color": [
+      150,
+      200,
+      255
+    ],
+    "mountain_color": [
+      180,
+      180,
+      210
+    ],
+    "obstacle_chance": 0.08,
+    "water_threshold": 0.4,
+    "mountain_threshold": 0.65,
+    "enemy_types": [
+      "enemy_sniper"
+    ],
+    "music_theme": "tundra.mid",
+    "obstacle_types": [
+      "IceBoulder",
+      "FrozenTree"
+    ]
+  },
+  "forest": {
+    "name": "Forest",
+    "base_color": [
+      34,
+      139,
+      34
+    ],
+    "water_color": [
+      30,
+      144,
+      255
+    ],
+    "mountain_color": [
+      110,
+      139,
+      61
+    ],
+    "obstacle_chance": 0.2,
+    "water_threshold": 0.35,
+    "mountain_threshold": 0.75,
+    "enemy_types": [
+      "enemy_ambusher",
+      "enemy_grunt"
+    ],
+    "music_theme": "forest.mid",
+    "obstacle_types": [
+      "Tree",
+      "ThickTree"
+    ]
+  },
+  "volcano": {
+    "name": "Volcanic",
+    "base_color": [
+      100,
+      40,
+      40
+    ],
+    "water_color": [
+      200,
+      50,
+      10
+    ],
+    "mountain_color": [
+      80,
+      30,
+      30
+    ],
+    "obstacle_chance": 0.15,
+    "water_threshold": 0.2,
+    "mountain_threshold": 0.6,
+    "enemy_types": [
+      "enemy_sniper",
+      "enemy_grunt"
+    ],
+    "music_theme": "volcano.mid",
+    "obstacle_types": [
+      "LavaRock",
+      "ObsidianSpire"
+    ]
+  }
+}

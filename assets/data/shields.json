@@ -1,0 +1,29 @@
+{
+  "S-001": {
+    "item_type": "shield",
+    "name": "Basic Energy Shield",
+    "base_capacity": 30.0,
+    "recharge_rate": 0.8,
+    "quality": "Common",
+    "efficiency": 1.2,
+    "sprite_name": null
+  },
+  "S-002": {
+    "item_type": "shield",
+    "name": "Rapid Recharge Shield",
+    "base_capacity": 25.0,
+    "recharge_rate": 2.0,
+    "quality": "Rare",
+    "efficiency": 1.1,
+    "sprite_name": null
+  },
+   "S-003": {
+    "item_type": "shield",
+    "name": "High Capacity Shield",
+    "base_capacity": 75.0,
+    "recharge_rate": 0.5,
+    "quality": "Rare",
+    "efficiency": 1.0,
+    "sprite_name": null
+  }
+}

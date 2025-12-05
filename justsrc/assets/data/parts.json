@@ -1,0 +1,85 @@
+{
+  "P-TOR-001": {
+    "item_type": "part",
+    "name": "Standard Torso",
+    "slot": "torso",
+    "quality": "Common",
+    "sprite_name": "torso_std.png",
+    "stats": {
+      "hp_bonus": 20
+    },
+    "special": {}
+  },
+  "P-ARM-001": {
+    "item_type": "part",
+    "name": "Basic Arm Actuator",
+    "slot": "arm",
+    "quality": "Common",
+    "sprite_name": "arm_basic.png",
+    "stats": {
+      "damage_mult_bonus": 0.05
+    },
+    "special": {}
+  },
+  "P-LEG-001": {
+    "item_type": "part",
+    "name": "Standard Legs",
+    "slot": "leg",
+    "quality": "Common",
+    "sprite_name": "legs_std.png",
+    "stats": {
+      "speed_bonus": 0.5
+    },
+    "special": {}
+  },
+   "P-HEAD-001": {
+    "item_type": "part",
+    "name": "Basic Sensor Head",
+    "slot": "head",
+    "quality": "Common",
+    "sprite_name": "head_basic.png",
+    "stats": {
+       "crit_rate_bonus": 0.01
+    },
+    "special": {}
+  },
+   "P-BACK-001": {
+    "item_type": "part",
+    "name": "Energy Pack (Small)",
+    "slot": "back",
+    "quality": "Common",
+    "sprite_name": "back_energy_small.png",
+    "stats": {
+       "energy_capacity_bonus": 10,
+       "energy_regen_bonus": 0.1
+    },
+    "special": {}
+  },
+   "P-TOR-002": {
+    "item_type": "part",
+    "name": "Scout Chassis",
+    "slot": "torso",
+    "quality": "Rare",
+    "sprite_name": "torso_scout.png",
+    "stats": {
+      "hp_bonus": 10,
+      "speed_bonus": 1.5,
+      "energy_regen_bonus": 0.5
+    },
+    "special": {}
+  },
+   "P-TOR-003": {
+    "item_type": "part",
+    "name": "Heavy Plating",
+    "slot": "torso",
+    "quality": "Rare",
+    "sprite_name": "torso_heavy.png",
+    "stats": {
+      "hp_bonus": 50,
+      "armor_bonus": 5,
+      "speed_bonus": -1.0
+    },
+    "special": {}
+  }
+}
+```

@@ -1,0 +1,62 @@
+{
+    "amplifier": {
+        "id": "amplifier",
+        "name": "Amplifier",
+        "type": "processor",
+        "description": "Increases projectile damage.",
+        "base_stats": {
+            "damage_multiplier": 1.2
+        },
+        "merge_scaling": {
+            "damage_multiplier": 0.01
+        }
+    },
+    "splitter": {
+        "id": "splitter",
+        "name": "Splitter",
+        "type": "router",
+        "description": "Splits the projectile into two paths.",
+        "base_stats": {
+            "split_count": 2
+        },
+        "merge_scaling": {
+            "efficiency": 0.01
+        }
+    },
+    "resonator": {
+        "id": "resonator",
+        "name": "Resonator",
+        "type": "processor",
+        "description": "Adds elemental synergy to the projectile.",
+        "base_stats": {
+            "synergy_power": 1.0
+        },
+        "merge_scaling": {
+            "synergy_power": 0.05
+        }
+    },
+    "accelerator": {
+        "id": "accelerator",
+        "name": "Accelerator",
+        "type": "processor",
+        "description": "Increases projectile speed.",
+        "base_stats": {
+            "speed_multiplier": 1.1
+        },
+        "merge_scaling": {
+            "speed_multiplier": 0.01
+        }
+    },
+    "multishot": {
+        "id": "multishot",
+        "name": "Multishot Module",
+        "type": "processor",
+        "description": "Adds an additional projectile.",
+        "base_stats": {
+            "projectile_count_add": 1
+        },
+        "merge_scaling": {
+            "efficiency": 0.01
+        }
+    }
+}

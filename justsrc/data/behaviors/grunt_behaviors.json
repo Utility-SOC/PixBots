@@ -1,0 +1,49 @@
+{
+    "behaviors": [
+        {
+            "id": "melee_charge",
+            "enemy_class": "grunt",
+            "action_type": "move_toward",
+            "parameters": {
+                "target": "player",
+                "speed_multiplier": 1.5,
+                "min_distance": 50,
+                "aggression": 0.9
+            },
+            "success_weight": 1.0
+        },
+        {
+            "id": "swarm_formation",
+            "enemy_class": "grunt",
+            "action_type": "group_up",
+            "parameters": {
+                "allies": "grunts",
+                "formation": "circle",
+                "radius": 100
+            },
+            "success_weight": 0.8
+        },
+        {
+            "id": "berserker_rush",
+            "enemy_class": "grunt",
+            "action_type": "sprint_attack",
+            "parameters": {
+                "speed_multiplier": 2.0,
+                "damage_bonus": 1.3,
+                "duration": 3.0
+            },
+            "success_weight": 0.7
+        },
+        {
+            "id": "shield_bash",
+            "enemy_class": "grunt",
+            "action_type": "melee_attack",
+            "parameters": {
+                "damage": 10,
+                "knockback": 50,
+                "cooldown": 2.0
+            },
+            "success_weight": 0.9
+        }
+    ]
+}

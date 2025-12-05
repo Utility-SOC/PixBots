@@ -1,0 +1,62 @@
+{
+    "behaviors": [
+        {
+            "id": "long_range_aim",
+            "enemy_class": "sniper",
+            "action_type": "precision_shot",
+            "parameters": {
+                "charge_time": 1.5,
+                "damage": 25,
+                "range": 600,
+                "accuracy": 0.95
+            },
+            "success_weight": 1.3
+        },
+        {
+            "id": "maintain_distance",
+            "enemy_class": "sniper",
+            "action_type": "kite_away",
+            "parameters": {
+                "ideal_range": 450,
+                "min_range": 350,
+                "retreat_speed": 1.1
+            },
+            "success_weight": 1.0
+        },
+        {
+            "id": "reposition_high_ground",
+            "enemy_class": "sniper",
+            "action_type": "tactical_move",
+            "parameters": {
+                "prefer_elevation": true,
+                "cover_bonus": 0.5,
+                "movement_interval": 8.0
+            },
+            "success_weight": 0.8
+        },
+        {
+            "id": "suppressive_fire",
+            "enemy_class": "sniper",
+            "action_type": "area_denial",
+            "parameters": {
+                "shots": 5,
+                "spread_angle": 30,
+                "slow_effect": 0.7,
+                "duration": 3.0
+            },
+            "success_weight": 0.9
+        },
+        {
+            "id": "headshot_attempt",
+            "enemy_class": "sniper",
+            "action_type": "critical_shot",
+            "parameters": {
+                "charge_time": 2.5,
+                "damage_multiplier": 2.5,
+                "accuracy": 0.75,
+                "cooldown": 10.0
+            },
+            "success_weight": 1.5
+        }
+    ]
+}

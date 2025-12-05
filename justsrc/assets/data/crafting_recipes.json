@@ -1,0 +1,11 @@
+{
+    "recipes": [
+        {
+            "result": "Magic Sword",
+            "components": [
+                "Sword",
+                "Magic Crystal"
+            ]
+        }
+    ]
+}

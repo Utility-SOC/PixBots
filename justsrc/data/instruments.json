@@ -1,0 +1,205 @@
+{
+    "flute": {
+        "waveform": "custom",
+        "harmonics": [
+            1.0,
+            0.5,
+            0.2,
+            0.1
+        ],
+        "attack": 0.1,
+        "decay": 0.1,
+        "sustain": 0.8,
+        "release": 0.2,
+        "volume": 0.8
+    },
+    "piano": {
+        "waveform": "custom",
+        "harmonics": [
+            1.0,
+            0.4,
+            0.2,
+            0.1,
+            0.05
+        ],
+        "attack": 0.01,
+        "decay": 0.4,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 1.0
+    },
+    "bass": {
+        "waveform": "sawtooth",
+        "attack": 0.01,
+        "decay": 0.2,
+        "sustain": 0.6,
+        "release": 0.1,
+        "volume": 0.7
+    },
+    "pad": {
+        "waveform": "custom",
+        "harmonics": [
+            1.0,
+            0.7,
+            0.5,
+            0.3,
+            0.1
+        ],
+        "attack": 0.5,
+        "decay": 0.5,
+        "sustain": 0.8,
+        "release": 0.5,
+        "volume": 0.6
+    },
+    "bell": {
+        "waveform": "fm",
+        "fm_ratio": 1.414,
+        "fm_index": 3.0,
+        "attack": 0.01,
+        "decay": 1.0,
+        "sustain": 0.0,
+        "release": 1.0,
+        "volume": 0.9
+    },
+    "duduk": {
+        "waveform": "fm",
+        "fm_ratio": 0.5,
+        "fm_index": 1.5,
+        "attack": 0.2,
+        "decay": 0.1,
+        "sustain": 0.7,
+        "release": 0.2,
+        "volume": 0.8
+    },
+    "marimba": {
+        "waveform": "custom",
+        "harmonics": [
+            1.0,
+            0.1,
+            0.05
+        ],
+        "attack": 0.01,
+        "decay": 0.2,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 1.0
+    },
+    "drum_kick": {
+        "waveform": "kick",
+        "attack": 0.01,
+        "decay": 0.2,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 1.2
+    },
+    "drum_snare": {
+        "waveform": "snare",
+        "attack": 0.01,
+        "decay": 0.15,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 0.9
+    },
+    "drum_hihat": {
+        "waveform": "noise",
+        "attack": 0.005,
+        "decay": 0.05,
+        "sustain": 0.0,
+        "release": 0.05,
+        "volume": 0.6
+    },
+    "shaker": {
+        "waveform": "noise",
+        "attack": 0.02,
+        "decay": 0.05,
+        "sustain": 0.0,
+        "release": 0.05,
+        "volume": 0.5
+    },
+    "woodblock": {
+        "waveform": "sine",
+        "attack": 0.01,
+        "decay": 0.05,
+        "sustain": 0.0,
+        "release": 0.05,
+        "volume": 0.9
+    },
+    "crunchy_bass": {
+        "waveform": "sawtooth",
+        "volume": 0.8,
+        "harmonics": [
+            1.0,
+            0.5,
+            0.2
+        ]
+    },
+    "reggaeton_snare": {
+        "waveform": "snare",
+        "attack": 0.01,
+        "decay": 0.1,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 0.9
+    },
+    "surf_guitar": {
+        "waveform": "karplus_strong",
+        "attack": 0.01,
+        "decay": 0.3,
+        "sustain": 0.4,
+        "release": 0.2,
+        "volume": 0.8,
+        "effects": [
+            {
+                "type": "distortion",
+                "drive": 2.0
+            },
+            {
+                "type": "tremolo",
+                "rate": 6.0,
+                "depth": 0.8
+            },
+            {
+                "type": "delay",
+                "time": 0.15,
+                "feedback": 0.3
+            }
+        ]
+    },
+    "pizzicato": {
+        "waveform": "karplus_strong",
+        "attack": 0.01,
+        "decay": 0.1,
+        "sustain": 0.0,
+        "release": 0.1,
+        "volume": 0.8
+    },
+    "bassoon": {
+        "waveform": "custom",
+        "attack": 0.05,
+        "decay": 0.1,
+        "sustain": 0.8,
+        "release": 0.2,
+        "volume": 0.7,
+        "harmonics": [
+            1.0,
+            0.8,
+            0.6,
+            0.4,
+            0.2
+        ]
+    },
+    "choir": {
+        "waveform": "custom",
+        "attack": 0.5,
+        "decay": 0.2,
+        "sustain": 0.8,
+        "release": 0.5,
+        "volume": 0.6,
+        "harmonics": [
+            1.0,
+            0.3,
+            0.1,
+            0.05
+        ]
+    }
+}

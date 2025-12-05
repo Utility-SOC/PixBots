@@ -1,0 +1,78 @@
+{
+  "Boulder": {
+    "hp": 50,
+    "destructible_by": [
+      "explosive",
+      "kinetic"
+    ],
+    "sprite": "boulder.png",
+    "blocks_movement": true
+  },
+  "Tree": {
+    "hp": 30,
+    "destructible_by": [
+      "fire",
+      "melee",
+      "explosive"
+    ],
+    "sprite": "tree.png",
+    "blocks_movement": true
+  },
+  "Cactus": {
+    "hp": 20,
+    "destructible_by": [
+      "fire",
+      "melee",
+      "explosive"
+    ],
+    "sprite": "cactus.png",
+    "blocks_movement": true
+  },
+  "LavaRock": {
+    "hp": 60,
+    "destructible_by": [
+      "explosive",
+      "kinetic"
+    ],
+    "sprite": "lava_rock.png",
+    "blocks_movement": true
+  },
+  "ObsidianSpire": {
+    "hp": 100,
+    "destructible_by": [
+      "explosive"
+    ],
+    "sprite": "obsidian_spire.png",
+    "blocks_movement": true
+  },
+  "IceBoulder": {
+    "hp": 40,
+    "destructible_by": [
+      "explosive",
+      "kinetic",
+      "fire"
+    ],
+    "sprite": "ice_boulder.png",
+    "blocks_movement": true
+  },
+  "FrozenTree": {
+    "hp": 25,
+    "destructible_by": [
+      "fire",
+      "melee",
+      "explosive"
+    ],
+    "sprite": "frozen_tree.png",
+    "blocks_movement": true
+  },
+  "ThickTree": {
+    "hp": 60,
+    "destructible_by": [
+      "fire",
+      "melee",
+      "explosive"
+    ],
+    "sprite": "thick_tree.png",
+    "blocks_movement": true
+  }
+}

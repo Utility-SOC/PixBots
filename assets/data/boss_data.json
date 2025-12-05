@@ -1,0 +1,10 @@
+{
+    "bosses": [
+        {
+            "id": 1,
+            "name": "Dark Lord",
+            "hp": 1000,
+            "phases": 3
+        }
+    ]
+}

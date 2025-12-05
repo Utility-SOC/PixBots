@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+Scripts/
+Lib/
+Include/
+pyvenv.cfg
+
+# Logs
+*.log
+error_log.txt
+
+# Testing
+test_*.py
+verification_*.py
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDEs
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Game Saves (Keep structure but ignore content if desired, but user might want to keep saves?)
+# saves/
+# For now, let's keep saves in git if they are small, or ignore them. 
+# Usually saves are ignored.
+saves/
+!saves/.gitkeep

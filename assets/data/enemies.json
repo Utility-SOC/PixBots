@@ -1,0 +1,14 @@
+{
+    "enemies": [
+        {
+            "id": 1,
+            "name": "Goblin",
+            "hp": 30
+        },
+        {
+            "id": 2,
+            "name": "Dragon",
+            "hp": 300
+        }
+    ]
+}

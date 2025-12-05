@@ -1,0 +1,117 @@
+{
+    "barrels": {
+        "basic_barrel": {
+            "id": "basic_barrel",
+            "name": "Standard Barrel",
+            "image_path": "assets/parts/barrel_basic.png",
+            "attachment_point": [
+                0,
+                0
+            ],
+            "muzzle_point": [
+                20,
+                0
+            ],
+            "tags": [
+                "common",
+                "ballistic"
+            ]
+        },
+        "sniper_barrel": {
+            "id": "sniper_barrel",
+            "name": "Long Barrel",
+            "image_path": "assets/parts/barrel_sniper.png",
+            "attachment_point": [
+                0,
+                0
+            ],
+            "muzzle_point": [
+                40,
+                0
+            ],
+            "tags": [
+                "rare",
+                "precision"
+            ]
+        },
+        "scatter_barrel": {
+            "id": "scatter_barrel",
+            "name": "Wide Barrel",
+            "image_path": "assets/parts/barrel_scatter.png",
+            "attachment_point": [
+                0,
+                0
+            ],
+            "muzzle_point": [
+                15,
+                0
+            ],
+            "tags": [
+                "uncommon",
+                "spread"
+            ]
+        }
+    },
+    "bodies": {
+        "basic_body": {
+            "id": "basic_body",
+            "name": "Standard Frame",
+            "image_path": "assets/parts/body_basic.png",
+            "barrel_mount": [
+                10,
+                5
+            ],
+            "stock_mount": [
+                -5,
+                5
+            ],
+            "tags": [
+                "common"
+            ]
+        },
+        "tech_body": {
+            "id": "tech_body",
+            "name": "Tech Frame",
+            "image_path": "assets/parts/body_tech.png",
+            "barrel_mount": [
+                12,
+                6
+            ],
+            "stock_mount": [
+                -4,
+                6
+            ],
+            "tags": [
+                "rare",
+                "energy"
+            ]
+        }
+    },
+    "stocks": {
+        "basic_stock": {
+            "id": "basic_stock",
+            "name": "Standard Stock",
+            "image_path": "assets/parts/stock_basic.png",
+            "attachment_point": [
+                10,
+                0
+            ],
+            "tags": [
+                "common"
+            ]
+        },
+        "heavy_stock": {
+            "id": "heavy_stock",
+            "name": "Reinforced Stock",
+            "image_path": "assets/parts/stock_heavy.png",
+            "attachment_point": [
+                12,
+                0
+            ],
+            "tags": [
+                "uncommon",
+                "stability"
+            ]
+        }
+    }
+}

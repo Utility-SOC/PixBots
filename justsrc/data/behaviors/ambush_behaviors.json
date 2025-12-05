@@ -1,0 +1,60 @@
+{
+    "behaviors": [
+        {
+            "id": "cloak_activate",
+            "enemy_class": "ambush",
+            "action_type": "stealth",
+            "parameters": {
+                "duration": 5.0,
+                "detection_radius_multiplier": 0.3,
+                "speed_bonus": 1.2
+            },
+            "success_weight": 1.2
+        },
+        {
+            "id": "flank_left",
+            "enemy_class": "ambush",
+            "action_type": "flanking_move",
+            "parameters": {
+                "direction": "left",
+                "arc_degrees": 120,
+                "speed_multiplier": 1.4
+            },
+            "success_weight": 1.0
+        },
+        {
+            "id": "flank_right",
+            "enemy_class": "ambush",
+            "action_type": "flanking_move",
+            "parameters": {
+                "direction": "right",
+                "arc_degrees": 120,
+                "speed_multiplier": 1.4
+            },
+            "success_weight": 1.0
+        },
+        {
+            "id": "burst_fire",
+            "enemy_class": "ambush",
+            "action_type": "rapid_attack",
+            "parameters": {
+                "shots": 3,
+                "delay_between": 0.2,
+                "damage_per_shot": 10,
+                "accuracy": 0.85
+            },
+            "success_weight": 1.1
+        },
+        {
+            "id": "smoke_escape",
+            "enemy_class": "ambush",
+            "action_type": "deploy_smoke",
+            "parameters": {
+                "radius": 150,
+                "duration": 4.0,
+                "retreat_speed": 1.8
+            },
+            "success_weight": 0.6
+        }
+    ]
+}
