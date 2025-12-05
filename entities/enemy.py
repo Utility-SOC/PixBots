@@ -2,6 +2,7 @@ from .bot import Bot
 import math
 import random
 import pygame
+import logging
 from .sprite_generator import ProceduralBotGenerator
 
 class Enemy(Bot):
