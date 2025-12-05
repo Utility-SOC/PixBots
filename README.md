@@ -7,6 +7,9 @@ A tactical hex-grid based roguelike where you build and upgrade your bot to surv
 1.  Ensure you have Python 3.10+ installed.
 2.  Install dependencies:
     ```bash
+    python -m venv PixBots
+    git pull https://github.com/Utility-SOC/PixBots
+    cd PixBots
     pip install -r requirements.txt
     ```
 3.  Run the game:
