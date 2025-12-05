@@ -10,6 +10,7 @@ A tactical hex-grid based roguelike where you build and upgrade your bot to surv
     python -m venv PixBots
     git pull https://github.com/Utility-SOC/PixBots
     cd PixBots
+    .\Scripts\activate.ps1
     pip install -r requirements.txt
     ```
 3.  Run the game:
