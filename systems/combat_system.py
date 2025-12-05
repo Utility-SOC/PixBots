@@ -146,161 +146,184 @@ class CombatSystem:
                 if p.owner == "player" and bot.name == "Player": continue
                 if p.owner == "enemy" and bot.name != "Player": continue
                 
+                # Bounding Box Check (Generous)
+                radius = constants.TILE_SIZE
+                if bot.sprite:
+                    radius = max(bot.sprite.get_width(), bot.sprite.get_height()) / 2
+                
                 dist = math.sqrt((p.x - bot.x)**2 + (p.y - bot.y)**2)
-                if dist < constants.TILE_SIZE / 2:
-                    health_before = bot.hp
-                    
-                    # Apply Status Effects
-                    if p.effects and "status_effect" in p.effects:
-                        status_name = p.effects["status_effect"]
-                        duration = p.effects.get("duration", 5.0)
-                        power = p.damage * 0.2 
-                        bot.apply_status_effect(status_name, duration, power)
-                    
-                    # Synergy Specifics
-                    # Handle multiple active synergies
-                    active_synergies = p.effects.get("active_synergies", [])
-                    # Fallback for legacy/single synergy
-                    if not active_synergies and p.effects.get("synergy_name"):
-                        active_synergies = [p.effects.get("synergy_name")]
+                if dist < radius:
+                    # Pixel-Perfect Mask Check
+                    hit = True
+                    if bot.mask and bot.sprite:
+                        # Calculate offset relative to sprite top-left
+                        # Sprite is centered at bot.x, bot.y
+                        sx = bot.x - bot.sprite.get_width() / 2
+                        sy = bot.y - bot.sprite.get_height() / 2
+                        offset_x = int(p.x - sx)
+                        offset_y = int(p.y - sy)
                         
-                    for synergy in active_synergies:
-                        if synergy == "fire":
-                            bot.apply_status_effect("burn", 3.0, p.damage * 0.2)
+                        # Check bounds
+                        if 0 <= offset_x < bot.sprite.get_width() and 0 <= offset_y < bot.sprite.get_height():
+                            if not bot.mask.get_at((offset_x, offset_y)):
+                                hit = False
+                        else:
+                            hit = False
+                    
+                    if hit:
+                        health_before = bot.hp
+                        
+                        # Apply Status Effects
+                        if p.effects and "status_effect" in p.effects:
+                            status_name = p.effects["status_effect"]
+                            duration = p.effects.get("duration", 5.0)
+                            power = p.damage * 0.2 
+                            bot.apply_status_effect(status_name, duration, power)
+                        
+                        # Synergy Specifics
+                        # Handle multiple active synergies
+                        active_synergies = p.effects.get("active_synergies", [])
+                        # Fallback for legacy/single synergy
+                        if not active_synergies and p.effects.get("synergy_name"):
+                            active_synergies = [p.effects.get("synergy_name")]
                             
-                        if synergy == "ice":
-                            bot.apply_status_effect("freeze", 3.0, 0)
-                            
-                        if synergy == "lightning":
-                            chain_range = 250.0
-                            chain_dmg = p.damage * 0.7
-                            
-                            nearest = None
-                            min_d = float('inf')
-                            for other in all_bots:
-                                if other == bot: continue
-                                if p.owner == "player" and other.name == "Player": continue
-                                if p.owner == "enemy" and other.name != "Player": continue
+                        for synergy in active_synergies:
+                            if synergy == "fire":
+                                bot.apply_status_effect("burn", 3.0, p.damage * 0.2)
                                 
-                                d_sq = (bot.x - other.x)**2 + (bot.y - other.y)**2
-                                if d_sq < chain_range**2 and d_sq < min_d:
-                                    min_d = d_sq
-                                    nearest = other
-                            
-                            if nearest:
-                                nearest.take_damage(chain_dmg)
-                                self.visual_effects.append(VisualEffect(
-                                    "lightning_bolt", bot.x, bot.y, 
-                                    end_pos=(nearest.x, nearest.y), duration=0.2
+                            if synergy == "ice":
+                                bot.apply_status_effect("freeze", 3.0, 0)
+                                
+                            if synergy == "lightning":
+                                chain_range = 250.0
+                                chain_dmg = p.damage * 0.7
+                                
+                                nearest = None
+                                min_d = float('inf')
+                                for other in all_bots:
+                                    if other == bot: continue
+                                    if p.owner == "player" and other.name == "Player": continue
+                                    if p.owner == "enemy" and other.name != "Player": continue
+                                    
+                                    d_sq = (bot.x - other.x)**2 + (bot.y - other.y)**2
+                                    if d_sq < chain_range**2 and d_sq < min_d:
+                                        min_d = d_sq
+                                        nearest = other
+                                
+                                if nearest:
+                                    nearest.take_damage(chain_dmg)
+                                    self.visual_effects.append(VisualEffect(
+                                        "lightning_bolt", bot.x, bot.y, 
+                                        end_pos=(nearest.x, nearest.y), duration=0.2
+                                    ))
+        
+                            if synergy == "vortex":
+                                 self.visual_effects.append(VisualEffect(
+                                    "implosion", p.x, p.y, radius=100, duration=0.3
                                 ))
-    
-                        if synergy == "vortex":
-                             self.visual_effects.append(VisualEffect(
-                                "implosion", p.x, p.y, radius=100, duration=0.3
-                            ))
-                            # Vortex Implosion (Instant Pull)
-                             implosion_radius = 200.0
-                             implosion_strength = 50.0
-                             for other_bot in all_bots:
-                                 if other_bot == bot: continue
-                                 if p.owner == "player" and other_bot.name == "Player": continue
-                                 if p.owner == "enemy" and other_bot.name != "Player": continue
-                                 
-                                 dx = p.x - other_bot.x
-                                 dy = p.y - other_bot.y
-                                 dist_sq = dx*dx + dy*dy
-                                 if dist_sq < implosion_radius**2:
-                                     dist = math.sqrt(dist_sq)
-                                     if dist > 10:
-                                         pull = min(dist - 10, implosion_strength)
-                                         other_bot.x += (dx / dist) * pull
-                                         other_bot.y += (dy / dist) * pull
-    
-                        if synergy == "explosion":
-                            # Explosion logic: Push away + Damage
-                            explosion_radius = 150.0
-                            explosion_force = 500.0
-                            self.visual_effects.append(VisualEffect(
-                                "implosion", p.x, p.y, radius=explosion_radius, duration=0.2 # Reuse implosion visual for now
-                            ))
-                            
-                            for other_bot in all_bots:
-                                if p.owner == "player" and other_bot.name == "Player": continue
-                                if p.owner == "enemy" and other_bot.name != "Player": continue
+                                # Vortex Implosion (Instant Pull)
+                                 implosion_radius = 200.0
+                                 implosion_strength = 50.0
+                                 for other_bot in all_bots:
+                                     if other_bot == bot: continue
+                                     if p.owner == "player" and other_bot.name == "Player": continue
+                                     if p.owner == "enemy" and other_bot.name != "Player": continue
+                                     
+                                     dx = p.x - other_bot.x
+                                     dy = p.y - other_bot.y
+                                     dist_sq = dx*dx + dy*dy
+                                     if dist_sq < implosion_radius**2:
+                                         dist = math.sqrt(dist_sq)
+                                         if dist > 10:
+                                             pull = min(dist - 10, implosion_strength)
+                                             other_bot.x += (dx / dist) * pull
+                                             other_bot.y += (dy / dist) * pull
+        
+                            if synergy == "explosion":
+                                # Explosion logic: Push away + Damage
+                                explosion_radius = 150.0
+                                explosion_force = 500.0
+                                self.visual_effects.append(VisualEffect(
+                                    "implosion", p.x, p.y, radius=explosion_radius, duration=0.2 # Reuse implosion visual for now
+                                ))
                                 
-                                dx = other_bot.x - p.x
-                                dy = other_bot.y - p.y
-                                dist_sq = dx*dx + dy*dy
-                                if dist_sq < explosion_radius**2:
-                                    dist = math.sqrt(dist_sq)
-                                    if dist < 1: dist = 1
-                                    angle = math.atan2(dy, dx)
-                                    other_bot.knockback(explosion_force, angle)
-                                    other_bot.take_damage(p.damage * 0.5)
+                                for other_bot in all_bots:
+                                    if p.owner == "player" and other_bot.name == "Player": continue
+                                    if p.owner == "enemy" and other_bot.name != "Player": continue
+                                    
+                                    dx = other_bot.x - p.x
+                                    dy = other_bot.y - p.y
+                                    dist_sq = dx*dx + dy*dy
+                                    if dist_sq < explosion_radius**2:
+                                        dist = math.sqrt(dist_sq)
+                                        if dist < 1: dist = 1
+                                        angle = math.atan2(dy, dx)
+                                        other_bot.knockback(explosion_force, angle)
+                                        other_bot.take_damage(p.damage * 0.5)
+        
+                            if synergy == "kinetic":
+                                # Kinetic Knockback
+                                knockback_force = 300.0
+                                bot.knockback(knockback_force, p.angle)
     
-                        if synergy == "kinetic":
-                            # Kinetic Knockback
-                            knockback_force = 300.0
-                            bot.knockback(knockback_force, p.angle)
-
-                        # Vampiric
-                        if synergy == "vampiric":
-                            # Formula: Healing = (Base_Rarity_Percentage) * (Reactor_Power / 100)
-                            # Base Rarity Percentage: Common=5%, Uncommon=10%, Rare=15%, Epic=20%, Legendary=25%
-                            rarity = p.effects.get("rarity", "Common")
-                            base_pct = 0.05
-                            if rarity == "Uncommon": base_pct = 0.10
-                            elif rarity == "Rare": base_pct = 0.15
-                            elif rarity == "Epic": base_pct = 0.20
-                            elif rarity == "Legendary": base_pct = 0.25
-                            
-                            # Reactor Power comes from the magnitude of the Vampiric synergy
-                            # We need to pass this in effects. Let's assume 'vampiric_power' is passed.
-                            reactor_power = p.effects.get("vampiric_power", 100.0)
-                            
-                            heal_pct = base_pct * (reactor_power / 100.0)
-                            heal_amount = p.damage * heal_pct
-                            
-                            if p.owner == "player":
-                                for b in all_bots:
-                                    if b.name == "Player":
-                                        b.heal(heal_amount)
-                                        break
-
-                    bot.take_damage(p.damage)
-                    
-                    # Pierce Logic
-                    if p.pierce_count > 0:
-                        p.pierce_count -= 1
-                        p.hit_list.append(id(bot))
-                        p.lifetime = constants.PROJECTILE_LIFETIME # Reset range
-                        # Do NOT set active = False
-                    else:
-                        p.active = False
-                    
-                    # AI Learning
-                    if bot.name == "Player" and self.behavior_system is not None:
-                        from entities.enemy import Enemy
-                        for enemy in all_bots:
-                            if isinstance(enemy, Enemy) and p.owner == "enemy":
-                                enemy_id = str(id(enemy))
-                                self.behavior_system.track_player_damage(
-                                    damage_amount=p.damage,
-                                    player_health_before=health_before,
-                                    player_health_after=bot.hp,
-                                    enemy_id=enemy_id,
-                                    enemy_class=enemy.ai_class
-                                )
-                                break
-                    
-                    if p.active: # If piercing, continue to check other collisions? 
-                        # No, usually one hit per frame per projectile is enough to avoid hitting same target multiple times if we didn't use hit_list correctly
-                        # But we use hit_list. 
-                        # However, if we break here, we stop checking other bots for this projectile this frame.
-                        # Which is correct, we hit one thing.
-                        break
-                    else:
-                        break
+                            # Vampiric
+                            if synergy == "vampiric":
+                                # Formula: Healing = (Base_Rarity_Percentage) * (Reactor_Power / 100)
+                                # Base Rarity Percentage: Common=5%, Uncommon=10%, Rare=15%, Epic=20%, Legendary=25%
+                                rarity = p.effects.get("rarity", "Common")
+                                base_pct = 0.05
+                                if rarity == "Uncommon": base_pct = 0.10
+                                elif rarity == "Rare": base_pct = 0.15
+                                elif rarity == "Epic": base_pct = 0.20
+                                elif rarity == "Legendary": base_pct = 0.25
+                                
+                                # Reactor Power comes from the magnitude of the Vampiric synergy
+                                # We need to pass this in effects. Let's assume 'vampiric_power' is passed.
+                                reactor_power = p.effects.get("vampiric_power", 100.0)
+                                
+                                heal_pct = base_pct * (reactor_power / 100.0)
+                                heal_amount = p.damage * heal_pct
+                                
+                                if p.owner == "player":
+                                    for b in all_bots:
+                                        if b.name == "Player":
+                                            b.heal(heal_amount)
+                                            break
+    
+                        bot.take_damage(p.damage)
+                        
+                        # Pierce Logic
+                        if p.pierce_count > 0:
+                            p.pierce_count -= 1
+                            p.hit_list.append(id(bot))
+                            p.lifetime = constants.PROJECTILE_LIFETIME # Reset range
+                            # Do NOT set active = False
+                        else:
+                            p.active = False
+                        
+                        # AI Learning
+                        if bot.name == "Player" and self.behavior_system is not None:
+                            from entities.enemy import Enemy
+                            for enemy in all_bots:
+                                if isinstance(enemy, Enemy) and p.owner == "enemy":
+                                    enemy_id = str(id(enemy))
+                                    self.behavior_system.track_player_damage(
+                                        damage_amount=p.damage,
+                                        player_health_before=health_before,
+                                        player_health_after=bot.hp,
+                                        enemy_id=enemy_id,
+                                        enemy_class=enemy.ai_class
+                                    )
+                                    break
+                        
+                        if p.active: # If piercing, continue to check other collisions? 
+                            # No, usually one hit per frame per projectile is enough to avoid hitting same target multiple times if we didn't use hit_list correctly
+                            # But we use hit_list. 
+                            # However, if we break here, we stop checking other bots for this projectile this frame.
+                            # Which is correct, we hit one thing.
+                            break
+                        else:
+                            break
 
         # Enemy-Enemy Collision & Vortex Smash & Contagion
         enemies = [b for b in all_bots if b.name != "Player" and b.hp > 0]
@@ -344,6 +367,7 @@ class CombatSystem:
                     near_vortex = False
                     for p in self.projectiles:
                         if p.active and p.effects and p.effects.get("synergy_name") == "vortex":
+                            if p.owner == "enemy": continue # No friendly fire from enemy vortices
                             if (p.x - bot1.x)**2 + (p.y - bot1.y)**2 < 250**2:
                                 near_vortex = True
                                 break

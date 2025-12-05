@@ -24,7 +24,12 @@ class Enemy(Bot):
         else: # Grunt
             sprite = self._generator.generate_grunt(seed)
         
-        super().__init__(name, x, y, hp=50 + (level * 10), sprite=sprite)
+        # Bot expects 'sprite' kwarg to be a path string, but we have a Surface.
+        # So we pass a dummy string and set self.sprite manually.
+        super().__init__(name, x, y, hp=50 + (level * 10), sprite="procedural_generated")
+        self.sprite = sprite
+        if self.sprite:
+            self.mask = pygame.mask.from_surface(self.sprite)
         self.level = level
         self.is_player = False
         self.target = None

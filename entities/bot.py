@@ -40,6 +40,7 @@ class Bot:
         self.asset_manager: Optional[ProceduralAssetManager] = None
         self.sprite_name = kwargs.get("sprite", "bots/default_bot32.png")
         self.sprite: Optional[pygame.Surface] = None
+        self.mask: Optional[pygame.mask.Mask] = None
         
         self.status_effects = {} # name -> {duration, power, tick_timer}
         
@@ -231,6 +232,8 @@ class Bot:
     def render(self, screen: pygame.Surface, offset_x: int, offset_y: int):
         if self.sprite is None and self.asset_manager:
             self.sprite = self.asset_manager.get_image(self.sprite_name)
+            if self.sprite:
+                self.mask = pygame.mask.from_surface(self.sprite)
 
         if self.sprite:
             sx = int(self.x + offset_x - self.sprite.get_width() / 2)
