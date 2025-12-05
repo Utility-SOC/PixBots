@@ -52,3 +52,27 @@ A tactical hex-grid based roguelike where you build and upgrade your bot to surv
 -   **Procedural Biomes**: Explore Forest, Desert, Ice, and Volcanic regions.
 -   **Crafting**: Scavenge parts and upgrade your systems.
 -   **Synergies**: Combine elemental effects (Fire, Ice, Lightning, etc.) for massive damage.
+
+## Debug Controls
+> [!NOTE]
+> These controls are for development and testing purposes.
+
+-   **F1**: Help Screen
+-   **F5**: Quick Save
+-   **F6**: Spawn Enemy Cohort (5-8 enemies)
+-   **F7**: Equip Multi-Vector Test Weapon (Legendary Arm)
+-   **F8**: Equip Full Legendary Gear Set
+-   **F9**: Quick Load
+-   **F10**: Toggle Boss Invulnerability
+-   **I**: Open Debug Spawn Menu (Spawn Items, Enemies, Cores)
+-   **J**: Open Debug Biome Switcher
+-   **R**: Open Reactor Debug Menu
+-   **B**: Spawn Random Enemy at Cursor
+
+## Roadmap
+1.  **Enhanced Procedural Generation**: Further refine enemy and biome generation with more unique parts and themes.
+2.  **Synergy Expansion**: Add more elemental combinations and complex status effects.
+3.  **Boss Mechanics**: Implement unique AI behaviors and phases for the new procedural bosses.
+4.  **Audio Overhaul**: Add sound effects and dynamic music layering based on combat intensity.
+5.  **UI Polish**: Improve menus, tooltips, and visual feedback for synergies.
+6.  **Save System Robustness**: Ensure all game state (including projectiles and particles) is persisted.
