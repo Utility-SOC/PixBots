@@ -33,16 +33,43 @@ Lib/
 Include/
 pyvenv.cfg
 
-# Logs
+# Logs and Debug
 *.log
-error_log.txt
+*.txt
+!requirements.txt
+!INSTRUCTIONS.md
+!README.md
+debug_*.py
+launch_debug*.txt
+music_log*.txt
+splitter_debug*.txt
+test_output.txt
+test_results.txt
+verify_log*.txt
 
-# Testing
+# Test and Verification Scripts
+tests/
+tools/
+verify_*.py
 test_*.py
-verification_*.py
-.coverage
-htmlcov/
-.pytest_cache/
+fix_*.py
+reproduce_*.py
+simple_verify.py
+generate_enemy_sprites.py
+pixelbots_main.py
+piticket.sh
+run_tests.bat
+
+# Artifacts
+justsrc/
+*.zip
+*.png
+!assets/**/*.png
+!test_output_weapon.png
+
+# Game Saves
+saves/
+!saves/.gitkeep
 
 # IDEs
 .vscode/
@@ -52,10 +79,3 @@ htmlcov/
 Thumbs.db
 Desktop.ini
 .DS_Store
-
-# Game Saves (Keep structure but ignore content if desired, but user might want to keep saves?)
-# saves/
-# For now, let's keep saves in git if they are small, or ignore them. 
-# Usually saves are ignored.
-saves/
-!saves/.gitkeep

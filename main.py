@@ -156,6 +156,33 @@ class Game:
                         self.game_map = GameMap(100, 100, constants.TILE_SIZE, self.asset_manager, seed=map_seed)
                         
                         self.state_manager.set_state(constants.STATE_PLAY)
+                        
+                        # Safety Check: Ensure player is on valid ground
+                        px_tile = int(self.player.x / constants.TILE_SIZE)
+                        py_tile = int(self.player.y / constants.TILE_SIZE)
+                        
+                        valid_pos = False
+                        if 0 <= px_tile < self.game_map.width and 0 <= py_tile < self.game_map.height:
+                            if self.game_map.terrain[py_tile][px_tile] != constants.WATER and (px_tile, py_tile) not in self.game_map.obstacles:
+                                valid_pos = True
+                                
+                        if not valid_pos:
+                            logger.warning(f"Loaded player at invalid position {self.player.x},{self.player.y}. Relocating...")
+                            cx, cy = self.game_map.width // 2, self.game_map.height // 2
+                            found_spot = False
+                            for r in range(0, 50):
+                                for dx in range(-r, r + 1):
+                                    for dy in range(-r, r + 1):
+                                        tx, ty = cx + dx, cy + dy
+                                        if 0 <= tx < self.game_map.width and 0 <= ty < self.game_map.height:
+                                            if self.game_map.terrain[ty][tx] != constants.WATER and (tx, ty) not in self.game_map.obstacles:
+                                                self.player.x = tx * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                                                self.player.y = ty * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                                                found_spot = True
+                                                break
+                                    if found_spot: break
+                                if found_spot: break
+                        
                         self.all_bots = [self.player] # Fix invisibility
                         logger.info(f"Game loaded successfully with seed {map_seed}.")
                     else:
@@ -810,40 +837,47 @@ class Game:
 
     def initialize_game(self):
         """Sets up the player and world for a new game."""
-        self.game_map = GameMap(width=100, height=100, tile_size=constants.TILE_SIZE, asset_manager=self.asset_manager, biome_type="meadow")
-        start_x = self.game_map.width * constants.TILE_SIZE / 2
-        start_y = self.game_map.height * constants.TILE_SIZE / 2
-        self.player = Player(name="Player", x=start_x, y=start_y)
+        self.game_map = GameMap(width=100, height=100, tile_size=constants.TILE_SIZE, asset_manager=self.asset_manager, biome_type=None)
+        
+        # Find a safe spawn point near the center
+        cx, cy = self.game_map.width // 2, self.game_map.height // 2
+        spawn_x, spawn_y = cx * constants.TILE_SIZE, cy * constants.TILE_SIZE
+        
+        # Spiral search for valid land
+        found_spot = False
+        for r in range(0, 20): # Search radius 20 tiles
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    tx, ty = cx + dx, cy + dy
+                    if 0 <= tx < self.game_map.width and 0 <= ty < self.game_map.height:
+                        if self.game_map.terrain[ty][tx] != constants.WATER and (tx, ty) not in self.game_map.obstacles:
+                            spawn_x = tx * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                            spawn_y = ty * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                            found_spot = True
+                            break
+                if found_spot: break
+            if found_spot: break
+            
+        self.player = Player(name="Player", x=spawn_x, y=spawn_y)
         self.player.asset_manager = self.asset_manager
         
         # Link player to UI
         self.component_viewer.player = self.player
 
-        # Try to load game first
-        result = self.save_load_system.load_game(self.current_profile, self.asset_manager)
-        if result:
-            loaded_player, map_seed = result
-            self.player = loaded_player
-            
-            # Re-init map with saved seed
-            if map_seed is None: map_seed = 12345
-            self.game_map = GameMap(width=100, height=100, tile_size=constants.TILE_SIZE, asset_manager=self.asset_manager, seed=map_seed)
-            
-            logger.info(f"Loaded saved game with seed {map_seed}.")
-        else:
-            self.player.equip_component(create_starter_torso())
-            self.player.equip_component(create_starter_head())
-            self.player.equip_component(create_starter_leg("left_leg"))
-            self.player.equip_component(create_starter_leg("right_leg"))
-            self.player.equip_component(create_starter_arm("left_arm"))
-            self.player.equip_component(create_starter_arm("right_arm"))
-            
-            # Add some inventory items for testing crafting
-            self.player.inventory.append(create_starter_arm("left_arm"))
-            self.player.inventory.append(create_starter_arm("left_arm"))
-            self.player.inventory.append(create_starter_head())
-            self.player.inventory.append(create_starter_head())
-            logger.info("Started new game.")
+        # Starter Equipment
+        self.player.equip_component(create_starter_torso())
+        self.player.equip_component(create_starter_head())
+        self.player.equip_component(create_starter_leg("left_leg"))
+        self.player.equip_component(create_starter_leg("right_leg"))
+        self.player.equip_component(create_starter_arm("left_arm"))
+        self.player.equip_component(create_starter_arm("right_arm"))
+        
+        # Add some inventory items for testing crafting
+        self.player.inventory.append(create_starter_arm("left_arm"))
+        self.player.inventory.append(create_starter_arm("left_arm"))
+        self.player.inventory.append(create_starter_head())
+        self.player.inventory.append(create_starter_head())
+        logger.info("Started new game.")
 
         self.all_bots = [self.player]
         music.play_music(biome_name=self.game_map.biome_manager.current_biome)

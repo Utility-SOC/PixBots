@@ -18,18 +18,22 @@ class Enemy(Bot):
         seed = random.randint(0, 999999)
         
         if ai_class == "sniper":
-            sprite = self._generator.generate_sniper(seed)
+            sprite, metadata = self._generator.generate_sniper(seed)
         elif ai_class == "ambusher":
-            sprite = self._generator.generate_ambusher(biome, seed)
+            sprite, metadata = self._generator.generate_ambusher(biome, seed)
         elif ai_class == "Boss":
-            sprite = self._generator.generate_boss(seed)
+            sprite, metadata = self._generator.generate_boss(seed)
         else: # Grunt
-            sprite = self._generator.generate_grunt(seed)
+            sprite, metadata = self._generator.generate_grunt(seed)
         
         # Bot expects 'sprite' kwarg to be a path string, but we have a Surface.
         # So we pass a dummy string and set self.sprite manually.
         super().__init__(name, x, y, hp=50 + (level * 10), sprite="procedural_generated")
         self.sprite = sprite
+        
+        # Apply metadata (weapons)
+        if metadata and "weapons" in metadata:
+            self.weapons = metadata["weapons"]
         if self.sprite:
             self.mask = pygame.mask.from_surface(self.sprite)
         self.level = level
@@ -37,26 +41,29 @@ class Enemy(Bot):
         self.target = None
         
         # AI Settings based on class
+        self.weapons = []
         if self.ai_class == "sniper":
             self.detection_range = 600
             self.attack_range = 500
-            self.weapon = {"damage": 15 + level * 2, "speed": 500, "cooldown": 2.5, "last_shot": 0}
+            self.weapons.append({"damage": 15 + level * 2, "speed": 500, "cooldown": 2.5, "last_shot": 0, "synergy": None})
             self.max_speed = 150 # Slower
         elif self.ai_class == "ambusher":
             self.detection_range = 400
             self.attack_range = 150
-            self.weapon = {"damage": 10 + level, "speed": 300, "cooldown": 0.8, "last_shot": 0}
+            self.weapons.append({"damage": 10 + level, "speed": 300, "cooldown": 0.8, "last_shot": 0, "synergy": None})
             self.max_speed = 250 # Fast
         elif self.ai_class == "Boss":
             self.detection_range = 800
             self.attack_range = 400
-            self.weapon = {"damage": 25 + level * 3, "speed": 250, "cooldown": 1.0, "last_shot": 0}
+            # Bosses will get weapons assigned by generator or default here
+            # Default fallback if generator didn't assign
+            self.weapons.append({"damage": 25 + level * 3, "speed": 250, "cooldown": 1.0, "last_shot": 0, "synergy": None})
             self.max_speed = 120 # Slow but imposing
             self.hp *= 5 # Massive HP pool
         else: # Grunt
             self.detection_range = 400
             self.attack_range = 200
-            self.weapon = {"damage": 5 + level, "speed": 200, "cooldown": 1.5, "last_shot": 0}
+            self.weapons.append({"damage": 5 + level, "speed": 200, "cooldown": 1.5, "last_shot": 0, "synergy": None})
         
         # Tactics
         self.tactics = ["attack"]
@@ -167,7 +174,8 @@ class Enemy(Bot):
         if "buff" in self.tactics and not self.buff_active and self.buff_cooldown <= 0:
             if random.random() < 0.01: 
                 self.buff_active = True
-                self.weapon["damage"] *= 1.5
+                if self.weapons:
+                    self.weapons[0]["damage"] *= 1.5
                 self.buff_cooldown = 15.0
                 logging.getLogger(__name__).info(f"{self.name} activated BUFF!")
 
@@ -181,30 +189,34 @@ class Enemy(Bot):
         super().take_damage(amount)
 
     def shoot(self, target_x, target_y, combat_system, current_time):
-        if current_time - self.weapon["last_shot"] < self.weapon["cooldown"]:
-            return
+        for weapon in self.weapons:
+            if current_time - weapon["last_shot"] < weapon["cooldown"]:
+                continue
+                
+            angle = math.atan2(target_y - self.y, target_x - self.x)
             
-        angle = math.atan2(target_y - self.y, target_x - self.x)
-        
-        # Add some inaccuracy
-        angle += random.uniform(-0.1, 0.1)
-        
-        effects = {}
-        if self.synergy:
-            effects["synergy_name"] = self.synergy
-            # Add specific params if needed
-            if self.synergy == "vortex":
-                effects["spawn_vortex"] = {"radius": 100, "strength": 50, "duration": 3.0}
-            elif self.synergy == "explosion":
-                effects["explosion_radius"] = 60
-                effects["explosion_force"] = 200
-            elif self.synergy == "vampiric":
-                effects["vampiric_power"] = 50.0 # Enemies heal less
-        
-        combat_system.spawn_projectile(
-            self.x, self.y, angle, 
-            self.weapon["speed"], self.weapon["damage"], 
-            "energy", "enemy",
-            effects=effects
-        )
-        self.weapon["last_shot"] = current_time
+            # Add some inaccuracy
+            angle += random.uniform(-0.1, 0.1)
+            
+            effects = {}
+            # Use weapon specific synergy if available, else fallback to bot synergy
+            synergy = weapon.get("synergy") or self.synergy
+            
+            if synergy:
+                effects["synergy_name"] = synergy
+                # Add specific params if needed
+                if synergy == "vortex":
+                    effects["spawn_vortex"] = {"radius": 100, "strength": 50, "duration": 3.0}
+                elif synergy == "explosion":
+                    effects["explosion_radius"] = 60
+                    effects["explosion_force"] = 200
+                elif synergy == "vampiric":
+                    effects["vampiric_power"] = 50.0 # Enemies heal less
+            
+            combat_system.spawn_projectile(
+                self.x, self.y, angle, 
+                weapon["speed"], weapon["damage"], 
+                "energy", "enemy",
+                effects=effects
+            )
+            weapon["last_shot"] = current_time

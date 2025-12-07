@@ -1,111 +1,75 @@
 import pygame
-import logging
 import constants
-from ui.diegetic_ui import DiegeticUI
-
-logger = logging.getLogger(__name__)
 
 class PauseMenu:
-    """A diegetic pause menu."""
-    def __init__(self, screen: pygame.Surface, asset_manager):
+    def __init__(self, screen, asset_manager):
         self.screen = screen
         self.asset_manager = asset_manager
-        self.width = screen.get_width()
-        self.height = screen.get_height()
+        self.font = self.asset_manager.get_font(None, 48)
+        self.small_font = self.asset_manager.get_font(None, 32)
         
-        self.font_title = self.asset_manager.get_font(None, 64)
-        self.font_button = self.asset_manager.get_font(None, 36)
-        
-        # Menu Options
         self.options = [
-            "Resume",
-            "Save/Load",
-            "Settings",
-            "Help",
-            "Exit to Main Menu",
-            "Exit Desktop"
+            {"text": "Resume", "action": "resume"},
+            {"text": "Quick Save", "action": "save_load_menu"},
+            {"text": "Main Menu", "action": "main_menu"},
+            {"text": "Quit to Desktop", "action": "quit"}
         ]
+        self.selected_index = 0
         
-        # Calculate layout
-        self.buttons = {}
-        btn_width = 300
-        btn_height = 50
-        start_y = self.height / 2 - (len(self.options) * 60) / 2
-        
-        for i, option in enumerate(self.options):
-            rect = pygame.Rect(
-                self.width / 2 - btn_width / 2,
-                start_y + i * 60,
-                btn_width,
-                btn_height
-            )
-            self.buttons[option] = rect
-            
-        self.hovered_button = None
-        self.sub_state = "main" # main, save_load, settings, help
-
-    def handle_input(self, event) -> str | None:
-        if self.sub_state == "main":
-            if event.type == pygame.MOUSEMOTION:
-                self.hovered_button = None
-                for action, rect in self.buttons.items():
-                    if rect.collidepoint(event.pos):
-                        self.hovered_button = action
-                        break
-                        
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    for action, rect in self.buttons.items():
-                        if rect.collidepoint(event.pos):
-                            return self._handle_action(action)
-                            
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    return "resume"
+    def handle_input(self, event):
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_UP:
+                self.selected_index = (self.selected_index - 1) % len(self.options)
+            elif event.key == pygame.K_DOWN:
+                self.selected_index = (self.selected_index + 1) % len(self.options)
+            elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                return self.options[self.selected_index]["action"]
+            elif event.key == pygame.K_ESCAPE:
+                return "resume"
+                
+        elif event.type == pygame.MOUSEMOTION:
+            mx, my = pygame.mouse.get_pos()
+            # Simple mouse hover check
+            center_x = self.screen.get_width() // 2
+            start_y = 200
+            for i, opt in enumerate(self.options):
+                y = start_y + i * 60
+                rect = pygame.Rect(center_x - 100, y - 15, 200, 30)
+                if rect.collidepoint(mx, my):
+                    self.selected_index = i
                     
-        return None
-
-    def _handle_action(self, action):
-        if action == "Resume":
-            return "resume"
-        elif action == "Save/Load":
-            # For now, just print or maybe trigger a quick save/load?
-            # User asked for a menu, so maybe we should show sub-options.
-            # But for MVP, let's just return the action string and handle in main.py
-            # or toggle a sub-state here.
-            return "save_load_menu" 
-        elif action == "Settings":
-            return "settings"
-        elif action == "Help":
-            return "help"
-        elif action == "Exit to Main Menu":
-            return "main_menu"
-        elif action == "Exit Desktop":
-            return "quit"
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                mx, my = pygame.mouse.get_pos()
+                center_x = self.screen.get_width() // 2
+                start_y = 200
+                for i, opt in enumerate(self.options):
+                    y = start_y + i * 60
+                    rect = pygame.Rect(center_x - 100, y - 15, 200, 30)
+                    if rect.collidepoint(mx, my):
+                        return opt["action"]
+                        
         return None
 
     def draw(self):
-        # Semi-transparent overlay
-        overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 150))
+        # Draw semi-transparent background
+        overlay = pygame.Surface((self.screen.get_width(), self.screen.get_height()))
+        overlay.set_alpha(128)
+        overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
         
-        # Draw Scanlines
-        DiegeticUI.draw_scanlines(self.screen)
+        # Draw Title
+        title = self.font.render("PAUSED", True, (255, 255, 255))
+        self.screen.blit(title, (self.screen.get_width()//2 - title.get_width()//2, 100))
         
-        # Title
-        title_surf = self.font_title.render("PAUSED", True, DiegeticUI.HOLO_GREEN)
-        title_rect = title_surf.get_rect(center=(self.width/2, self.height/4))
+        # Draw Options
+        center_x = self.screen.get_width() // 2
+        start_y = 200
         
-        # Glow
-        glow_surf = self.font_title.render("PAUSED", True, DiegeticUI.HOLO_GREEN_DIM)
-        self.screen.blit(glow_surf, (title_rect.x + 2, title_rect.y + 2))
-        self.screen.blit(title_surf, title_rect)
-        
-        # Buttons
-        for action, rect in self.buttons.items():
-            is_hovered = (action == self.hovered_button)
-            
-            DiegeticUI.draw_holographic_button(
-                self.screen, rect, action, self.font_button, is_hovered
-            )
+        for i, opt in enumerate(self.options):
+            color = (255, 255, 255)
+            if i == self.selected_index:
+                color = (255, 215, 0) # Gold
+                
+            text = self.small_font.render(opt["text"], True, color)
+            self.screen.blit(text, (center_x - text.get_width()//2, start_y + i * 60))

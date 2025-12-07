@@ -65,12 +65,94 @@ class VisualEffect:
             if radius > 1:
                 pygame.draw.circle(screen, color, (int(cx), int(cy)), int(radius), 2)
 
+class ZoneEffect(VisualEffect):
+    def __init__(self, effect_type, x, y, radius, duration, **kwargs):
+        super().__init__(effect_type, x, y, duration=duration, **kwargs)
+        self.radius = radius
+        self.active = True
+        self.element = kwargs.get("element", "neutral") # water, fire, etc.
+        
+    def update(self, dt, all_bots, projectiles, combat_system):
+        super().update(dt)
+        if self.lifetime <= 0: 
+            self.active = False
+            return
+
+        # 1. Apply Effects to Bots
+        for bot in all_bots:
+            dist_sq = (bot.x - self.x)**2 + (bot.y - self.y)**2
+            if dist_sq < self.radius**2:
+                self._apply_zone_logic(bot, dt)
+                
+        # 2. Check Projectile Interactions
+        for p in projectiles:
+            if not p.active: continue
+            dist_sq = (p.x - self.x)**2 + (p.y - self.y)**2
+            if dist_sq < self.radius**2:
+                self._handle_projectile_interaction(p, combat_system)
+
+    def _apply_zone_logic(self, bot, dt):
+        if self.element == "water":
+            bot.apply_status_effect("wet", 0.1, 0) # Just mark them wet
+        elif self.element == "electrified_water":
+            bot.take_damage(20 * dt) # DoT
+            bot.apply_status_effect("shock", 0.5, 0)
+        elif self.element == "fire":
+            bot.apply_status_effect("burn", 1.0, 5)
+        elif self.element == "steam":
+            # Slow down
+            pass 
+
+    def _handle_projectile_interaction(self, p, combat_system):
+        # Elemental Reactions
+        synergy = p.effects.get("synergy_name") if p.effects else None
+        
+        if self.element == "water":
+            if synergy == "lightning":
+                # Transform to Electrified Water
+                self.element = "electrified_water"
+                self.lifetime = 5.0 # Refresh duration
+                combat_system.visual_effects.append(VisualEffect("lightning_bolt", self.x, self.y, end_pos=(self.x+random.randint(-20,20), self.y+random.randint(-20,20)), duration=0.5))
+                p.active = False # Consume projectile? Maybe
+            elif synergy == "fire":
+                # Create Steam
+                self.element = "steam"
+                self.lifetime = 3.0
+                p.active = False
+            elif synergy == "ice":
+                # Freeze
+                self.element = "ice"
+                self.lifetime = 5.0
+                p.active = False
+
+    def render(self, screen, camera_x, camera_y):
+        if self.lifetime <= 0: return
+        
+        cx = self.x + camera_x
+        cy = self.y + camera_y
+        
+        color = (100, 100, 100)
+        if self.element == "water": color = (0, 100, 255, 100)
+        elif self.element == "electrified_water": color = (200, 200, 255, 150)
+        elif self.element == "fire": color = (255, 100, 0, 100)
+        elif self.element == "steam": color = (200, 200, 200, 100)
+        elif self.element == "ice": color = (150, 255, 255, 150)
+        
+        # Draw transparent circle
+        s = pygame.Surface((self.radius*2, self.radius*2), pygame.SRCALPHA)
+        pygame.draw.circle(s, color, (self.radius, self.radius), self.radius)
+        screen.blit(s, (cx-self.radius, cy-self.radius))
+        
+        # Draw border
+        pygame.draw.circle(screen, (color[0], color[1], color[2]), (int(cx), int(cy)), int(self.radius), 2)
+
 class CombatSystem:
     def __init__(self, asset_manager, behavior_system=None):
         self.asset_manager = asset_manager
         self.projectiles = []
         self.vortices = [] # Legacy Vortex entities
         self.visual_effects = [] # New Visual Effects
+        self.zone_effects = [] # New Zone Effects
         self.behavior_system = behavior_system  # For AI learning
 
     def update(self, dt, game_map, all_bots):
@@ -78,6 +160,11 @@ class CombatSystem:
         for effect in self.visual_effects:
             effect.update(dt)
         self.visual_effects = [e for e in self.visual_effects if e.lifetime > 0]
+
+        # Update Zone Effects
+        for zone in self.zone_effects:
+            zone.update(dt, all_bots, self.projectiles, self)
+        self.zone_effects = [z for z in self.zone_effects if z.active]
 
         # Update Legacy Vortices
         for v in self.vortices:
@@ -380,6 +467,8 @@ class CombatSystem:
     def render(self, screen, camera_x, camera_y):
         for v in self.vortices:
             v.render(screen, camera_x, camera_y)
+        for z in self.zone_effects:
+            z.render(screen, camera_x, camera_y)
         for p in self.projectiles:
             p.render(screen, camera_x, camera_y)
         for effect in self.visual_effects:
@@ -407,3 +496,7 @@ class CombatSystem:
                     enemy_id=enemy_id,
                     enemy_class=source.ai_class
                 )
+
+    def spawn_zone_effect(self, effect_type, x, y, radius, duration, **kwargs):
+        z = ZoneEffect(effect_type, x, y, radius, duration, **kwargs)
+        self.zone_effects.append(z)
