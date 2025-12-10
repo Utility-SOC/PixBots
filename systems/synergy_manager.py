@@ -66,7 +66,9 @@ class SynergyManager:
         active_synergies_list = []
         
         for syn_type, mag in packet.synergies.items():
-            if mag / total_mag > 0.05: # Threshold to consider a synergy active
+            # Allow if significant ratio OR significant absolute value
+            # User wants 100 vampirism to count even if 1000 vortex is present.
+            if mag > 1.0: # Absolute threshold (1.0 is very low, ensuring almost anything registers)
                 # Convert Enum to string if necessary, or use value
                 syn_name = syn_type.value if isinstance(syn_type, SynergyType) else str(syn_type)
                 active_synergies_list.append(syn_name)
@@ -77,6 +79,9 @@ class SynergyManager:
                 # Merge effects (this is a simple merge, might need more complex logic later)
                 for k, v in base_effects.items():
                     active_effects[k] = v
+                
+                # Dynamic Power Injection: Ensure combat system knows the magnitude
+                active_effects[f"{syn_name}_power"] = mag
                     
         # If no specific synergy is dominant enough, default to raw
         if not active_synergies_list:

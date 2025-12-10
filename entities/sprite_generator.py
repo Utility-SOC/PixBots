@@ -27,6 +27,9 @@ class ProceduralBotGenerator:
         elif theme == "industrial":
             val = rng.randint(100, 180)
             return (val, val, val)
+        elif theme == "neon":
+            # High saturation colors
+            return (rng.randint(0, 255), rng.randint(0, 255), rng.randint(0, 255))
         return (rng.randint(0, 255), rng.randint(0, 255), rng.randint(0, 255))
 
     def generate_grunt(self, seed=None):
@@ -141,11 +144,11 @@ class ProceduralBotGenerator:
         return surf
 
     def _generate_mech_boss(self, rng):
-        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
-        cx, cy = 64, 64
+        surf = pygame.Surface((192, 192), pygame.SRCALPHA)
+        cx, cy = 96, 96
         
         # Theme & Colors
-        theme = rng.choice(["military", "industrial", "scifi", "void"])
+        theme = rng.choice(["military", "industrial", "scifi", "void", "neon", "infernal"])
         primary = self._get_random_color(rng, theme)
         secondary = self._get_random_color(rng, theme)
         dark = (max(0, primary[0]-50), max(0, primary[1]-50), max(0, primary[2]-50))
@@ -258,8 +261,8 @@ class ProceduralBotGenerator:
             return self._generate_mech_boss(rng)
             
         # 30% Chance for Abstract/Construct Boss (Original Style)
-        surf = pygame.Surface((128, 128), pygame.SRCALPHA)
-        cx, cy = 64, 64
+        surf = pygame.Surface((192, 192), pygame.SRCALPHA)
+        cx, cy = 96, 96
         
         # 1. Theme Selection
         theme = rng.choice(["scifi", "void", "infernal", "industrial"])

@@ -52,7 +52,11 @@ class ProjectileContext:
     is_active: bool = True
     
     # Modifiers applied during traversal
+    # Modifiers applied during traversal
     modifiers: List[ProjectileModifier] = field(default_factory=list)
+
+    # Custom Effects (metadata for secondary systems)
+    custom_effects: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         if not self.synergies:
@@ -83,6 +87,10 @@ class ProjectileContext:
     def clone(self) -> 'ProjectileContext':
         """Creates a deep copy of the context (for splitters)."""
         return copy.deepcopy(self)
+
+    def copy(self) -> 'ProjectileContext':
+        """Alias for clone(), providing standard naming."""
+        return self.clone()
 
     def get_dominant_synergy(self) -> SynergyType:
         """Returns the synergy type with the highest magnitude."""

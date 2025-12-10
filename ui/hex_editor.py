@@ -2,11 +2,14 @@
 # REWRITTEN: Specific entry/exit HEX visualization (not edge markers)
 
 import pygame
+import math
 from typing import Dict, Optional, List, Tuple
 from hex_system.hex_coord import HexCoord, pixel_to_hex, hex_to_pixel
 from hex_system.hex_tile import (
     HexTile, BasicConduitTile, AmplifierTile, ResonatorTile,
     SplitterTile, WeaponMountTile, ReflectorTile, FilterTile,
+    ShieldGenTile, CloakTile, AcceleratorTile,
+    HipsTile, KneesTile, AnklesTile, OrbitalModulatorTile,
     TileCategory
 )
 from hex_system.hex_renderer import HexRenderer
@@ -23,6 +26,13 @@ class TilePalette:
             ("5", "Reflector", lambda: ReflectorTile("", TileCategory.ROUTER)),
             ("6", "Weapon", lambda: WeaponMountTile("", TileCategory.OUTPUT)),
             ("7", "Super Conduit", lambda: self._create_super_conduit()),
+            ("8", "Shield Gen", lambda: ShieldGenTile("", TileCategory.OUTPUT)),
+            ("9", "Cloak", lambda: CloakTile("", TileCategory.OUTPUT)),
+            ("0", "Accelerator", lambda: AcceleratorTile("", TileCategory.OUTPUT)),
+            ("-", "Hips", lambda: HipsTile("", TileCategory.OUTPUT)),
+            ("=", "Knees", lambda: KneesTile("", TileCategory.OUTPUT)),
+            ("[", "Ankles", lambda: AnklesTile("", TileCategory.OUTPUT)),
+            ("]", "Orbital", lambda: OrbitalModulatorTile("", TileCategory.PROCESSOR)),
         ]
         self.selected_index = 0
 
@@ -181,6 +191,9 @@ class ComponentHexEditor:
         # Draw Palette
         self._draw_palette()
         
+        # Draw Legend
+        self._draw_legend()
+        
         # Draw Stats
         self._draw_stats(stats)
         
@@ -214,7 +227,9 @@ class ComponentHexEditor:
             key_map = {
                 pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3,
                 pygame.K_4: 4, pygame.K_5: 5, pygame.K_6: 6,
-                pygame.K_7: 7
+                pygame.K_7: 7, pygame.K_8: 8, pygame.K_9: 9, 
+                pygame.K_0: 10, pygame.K_MINUS: 11, pygame.K_EQUALS: 12,
+                pygame.K_LEFTBRACKET: 13, pygame.K_RIGHTBRACKET: 14
             }
             if event.key in key_map:
                 self.palette.select_by_key(key_map[event.key])
@@ -372,31 +387,89 @@ class ComponentHexEditor:
 
     
     def draw_torso_labels(self):
-        """Draws shape markers indicating which body part each direction leads to."""
-        mid_q = self.component.grid_width // 2
-        mid_r = self.component.grid_height // 2
-        center_hex = HexCoord(mid_q, mid_r)
+        """Draws shape markers indicating which body part each direction leads to, with lines to specific hexes."""
+        valid = self.component.valid_coords
+        if not valid: return
         
-        # Calculate screen positions relative to center
-        cx, cy = self.renderer.world_to_screen(center_hex)
-        radius = 130 # Distance from center to draw labels
+        # Calculate bounds
+        min_q = min(c.q for c in valid)
+        max_q = max(c.q for c in valid)
+        min_r = min(c.r for c in valid)
+        max_r = max(c.r for c in valid)
+        mid_q = (min_q + max_q) // 2
+        mid_r = (min_r + max_r) // 2
         
-        # (direction, shape, color, offset_vector)
-        labels = [
-            (0, "triangle_right", (100, 100, 255), (1, 0)),   # R. ARM (Blue)
-            (3, "triangle_left", (100, 255, 100), (-1, 0)),   # L. ARM (Green)
-            (1, "diamond", (255, 255, 100), (0.5, -1)),       # HEAD (Yellow)
-            (2, "square", (200, 100, 255), (-0.5, -1)),       # BACK (Purple)
-            (4, "pentagon", (100, 255, 255), (-0.5, 1)),      # LEGS (Cyan)
-            (5, "pentagon", (100, 255, 255), (0.5, 1))        # LEGS (Cyan)
+        # Dynamic Target Finding
+        # 0: Right Arm (East) -> Max Q, Mid R
+        hex_0 = min(valid, key=lambda c: abs(c.q - max_q) + abs(c.r - mid_r))
+        
+        # 3: Left Arm (West) -> Min Q, Mid R
+        hex_3 = min(valid, key=lambda c: abs(c.q - min_q) + abs(c.r - mid_r))
+        
+        # 1: Head (Top) -> Min R, Mid Q (Using NE direction slot 1)
+        hex_1 = min(valid, key=lambda c: abs(c.r - min_r) + abs(c.q - mid_q))
+        
+        # 2: Back (Top Left) -> Min R, Min Q (Using NW direction slot 2)
+        hex_2 = min(valid, key=lambda c: abs(c.r - min_r) + abs(c.q - min_q))
+        
+        # 5: Right Leg (Bottom Right) -> Max R, Max Q (Using SE direction slot 5)
+        hex_5 = min(valid, key=lambda c: abs(c.r - max_r) + abs(c.q - max_q))
+        
+        # 4: Left Leg (Bottom Left) -> Max R, Min Q (Using SW direction slot 4)
+        hex_4 = min(valid, key=lambda c: abs(c.r - max_r) + abs(c.q - min_q))
+
+        # Mapping
+        # (direction, shape, color, target_hex)
+        markers = [
+            (0, "triangle_right", (100, 100, 255), hex_0),   # R. ARM
+            (3, "triangle_left", (100, 255, 100), hex_3),    # L. ARM
+            (1, "diamond", (255, 255, 100), hex_1),          # HEAD
+            (2, "square", (200, 100, 255), hex_2),           # BACK
+            (5, "pentagon", (100, 255, 255), hex_5),         # R. LEG
+            (4, "pentagon", (100, 255, 255), hex_4)          # L. LEG
         ]
         
-        for direction, shape, color, (dx, dy) in labels:
-            # Calculate position
-            x = cx + dx * radius
-            y = cy + dy * radius
+        # Filter duplicates to avoid stacking markers if grid is small
+        # (Optional, but good for clarity. For now, let them stack or just draw over)
+        
+        for direction, shape, color, target_hex in markers:
+            if not self._is_in_bounds(target_hex): 
+                continue
             
-            self.renderer.draw_marker_shape((x, y), shape, color, size=25)
+            # Calculate Screen Pos of Target Hex
+            tx, ty = self.renderer.world_to_screen(target_hex)
+            
+            # Calculate Label Pos (Further out from center relative to grid center)
+            # Find grid center (visual center of bounding box)
+            center_q = (min_q + max_q) / 2
+            center_r = (min_r + max_r) / 2
+            # Approximate pixel center
+            cx, cy = self.renderer.world_to_screen(HexCoord(int(center_q), int(center_r)))
+            
+            # Vector from center to target hex
+            vx = tx - cx
+            vy = ty - cy
+            dist = math.hypot(vx, vy)
+            if dist == 0: 
+                # Fallback direction if target is at center
+                angle = math.radians(direction * 60)
+                vx = math.cos(angle)
+                vy = math.sin(angle)
+                dist = 1.0
+            
+            # Push out by extra spacing
+            label_dist = dist + 80 # Push 80px past the hex
+            lx = cx + (vx/dist) * label_dist
+            ly = cy + (vy/dist) * label_dist
+            
+            # Draw Line
+            pygame.draw.line(self.screen, (200, 200, 200), (tx, ty), (lx, ly), 2)
+            
+            # Draw Marker at Label Pos
+            self.renderer.draw_marker_shape((lx, ly), shape, color, size=25)
+            
+            # Draw Exit Indicator on the Hex itself (small highlight)
+            pygame.draw.circle(self.screen, color, (int(tx), int(ty)), 5)
 
     def _draw_palette(self):
         # Draw palette background
@@ -411,6 +484,47 @@ class ComponentHexEditor:
         
         desc_surf = self.font.render(selected_tile.description, True, (200, 200, 200))
         self.screen.blit(desc_surf, (20, self.screen.get_height() - 60))
+
+    def _draw_legend(self):
+        """Draws a list of all available tiles and their keys."""
+        panel_rect = pygame.Rect(10, 50, 200, 420)
+        pygame.draw.rect(self.screen, (30, 30, 40), panel_rect)
+        pygame.draw.rect(self.screen, (100, 100, 120), panel_rect, 2)
+        
+        y = 60
+        title = self.title_font.render("Legend", True, (255, 255, 100))
+        self.screen.blit(title, (30, y))
+        y += 40
+        
+        # Helper to draw key + name
+        def draw_item(key, name, color):
+            nonlocal y
+            key_surf = self.font.render(f"[{key}]", True, (255, 200, 100))
+            name_surf = self.font.render(name, True, (255, 255, 255))
+            
+            self.screen.blit(key_surf, (20, y))
+            self.screen.blit(name_surf, (60, y))
+            
+            # Small color indicator
+            pygame.draw.circle(self.screen, color, (190, y + 10), 6)
+            y += 25
+
+        # Updated list matches Palette
+        draw_item("1", "Conduit", (100, 100, 100))
+        draw_item("2", "Amplifier", (50, 200, 100)) # Greenish active
+        draw_item("3", "Resonator", (100, 100, 255)) # Blue active
+        draw_item("4", "Splitter", (200, 200, 50))
+        draw_item("5", "Reflector", (200, 50, 200))
+        draw_item("6", "Weapon", (255, 50, 50))
+        draw_item("7", "Super Cond", (255, 200, 100))
+        y += 5
+        draw_item("8", "Shield", (50, 50, 255))
+        draw_item("9", "Cloak", (50, 50, 50))
+        draw_item("0", "Accel.", (255, 50, 50))
+        y += 5
+        draw_item("-", "Hips", (200, 200, 50))
+        draw_item("=", "Knees", (150, 100, 255))
+        draw_item("[", "Ankles", (50, 200, 200))
 
     def _draw_stats(self, stats: dict):
         # Draw stats panel on right
@@ -427,13 +541,25 @@ class ComponentHexEditor:
             f"Flow Efficiency: {stats['damage_multiplier']:.2f}x",
             f"Weapon Dmg: {stats['weapon_damage']:.1f}",
             f"Active Tiles: {stats['active_tiles']}",
-            f"Synergies: {', '.join([str(s.name) if hasattr(s, 'name') else str(s) for s in stats['synergies']])}"
         ]
         
+        # Add Synergy Breakdown
+        magnitudes = stats.get("synergy_magnitudes", {})
+        if magnitudes:
+            lines.append("--- Synergies ---")
+            # Sort by mag
+            for syn, mag in sorted(magnitudes.items(), key=lambda x: x[1], reverse=True):
+                syn_name = str(syn).split('.')[-1].upper()
+                lines.append(f"{syn_name}: {mag:.1f}")
+        
+        # Add Active Synergy Name
+        if stats.get("active_synergy"):
+             lines.append(f"DOMINANT: {stats['active_synergy']}")
+
         for line in lines:
             surf = self.font.render(line, True, (220, 220, 220))
             self.screen.blit(surf, (self.screen.get_width() - 230, y))
-            y += 30
+            y += 24 # Reduced spacing to fit more info
 
     def _draw_tooltip(self, hex_coord: HexCoord):
         if hex_coord not in self.tile_grid: return

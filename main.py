@@ -138,57 +138,50 @@ class Game:
 
             if current_state == constants.STATE_MENU:
                 action = self.main_menu.handle_input(event)
-                if action == "new_game":
-                    logger.info("Starting new game...")
-                    self.initialize_game()
-                    logger.info(f"Game initialized with map size {self.game_map.width}x{self.game_map.height}")
-                    self.state_manager.set_state(constants.STATE_PLAY)
-                elif action == "load_game":
-                    logger.info("Loading game...")
-                    result = self.save_load_system.load_game(self.current_profile, self.asset_manager)
-                    if result:
-                        loaded_player, map_seed = result
-                        self.player = loaded_player
-                        
-                        # Initialize map with saved seed
-                        from world.game_map import GameMap
-                        if map_seed is None: map_seed = 12345 # Fallback
-                        self.game_map = GameMap(100, 100, constants.TILE_SIZE, self.asset_manager, seed=map_seed)
-                        
-                        self.state_manager.set_state(constants.STATE_PLAY)
-                        
-                        # Safety Check: Ensure player is on valid ground
-                        px_tile = int(self.player.x / constants.TILE_SIZE)
-                        py_tile = int(self.player.y / constants.TILE_SIZE)
-                        
-                        valid_pos = False
-                        if 0 <= px_tile < self.game_map.width and 0 <= py_tile < self.game_map.height:
-                            if self.game_map.terrain[py_tile][px_tile] != constants.WATER and (px_tile, py_tile) not in self.game_map.obstacles:
-                                valid_pos = True
-                                
-                        if not valid_pos:
-                            logger.warning(f"Loaded player at invalid position {self.player.x},{self.player.y}. Relocating...")
-                            cx, cy = self.game_map.width // 2, self.game_map.height // 2
-                            found_spot = False
-                            for r in range(0, 50):
-                                for dx in range(-r, r + 1):
-                                    for dy in range(-r, r + 1):
-                                        tx, ty = cx + dx, cy + dy
-                                        if 0 <= tx < self.game_map.width and 0 <= ty < self.game_map.height:
-                                            if self.game_map.terrain[ty][tx] != constants.WATER and (tx, ty) not in self.game_map.obstacles:
-                                                self.player.x = tx * constants.TILE_SIZE + constants.TILE_SIZE / 2
-                                                self.player.y = ty * constants.TILE_SIZE + constants.TILE_SIZE / 2
-                                                found_spot = True
-                                                break
-                                    if found_spot: break
-                                if found_spot: break
-                        
-                        self.all_bots = [self.player] # Fix invisibility
-                        logger.info(f"Game loaded successfully with seed {map_seed}.")
-                    else:
-                        logger.warning("No save game found.")
+                if action == "select_slot_new":
+                    from ui.save_slot_menu import SaveSlotMenu
+                    self.save_slot_menu = SaveSlotMenu(self.screen, self.asset_manager, self.save_load_system, mode="new")
+                    self.state_manager.set_state(constants.STATE_SAVE_SLOT)
+                elif action == "select_slot_load":
+                    from ui.save_slot_menu import SaveSlotMenu
+                    self.save_slot_menu = SaveSlotMenu(self.screen, self.asset_manager, self.save_load_system, mode="load")
+                    self.state_manager.set_state(constants.STATE_SAVE_SLOT)
                 elif action == "quit":
                     self.is_running = False
+
+            elif current_state == constants.STATE_SAVE_SLOT:
+                if hasattr(self, 'save_slot_menu'):
+                    slot = self.save_slot_menu.handle_input(event)
+                    if slot == "back":
+                        self.state_manager.set_state(constants.STATE_MENU)
+                    elif slot:
+                        # Slot selected
+                        self.current_profile = slot
+                        if self.save_slot_menu.mode == "new":
+                            logger.info(f"Starting new game in {slot}...")
+                            self.initialize_game()
+                            self.state_manager.set_state(constants.STATE_PLAY)
+                        else:
+                            logger.info(f"Loading game from {slot}...")
+                            result = self.save_load_system.load_game(self.current_profile, self.asset_manager)
+                            if result:
+                                loaded_player, map_seed = result
+                                self.player = loaded_player
+                                
+                                # Re-init map with saved seed
+                                if map_seed is None: map_seed = 12345
+                                self.game_map = GameMap(width=100, height=100, tile_size=constants.TILE_SIZE, asset_manager=self.asset_manager, seed=map_seed)
+                                
+                                self.state_manager.set_state(constants.STATE_PLAY)
+                                
+                                # Safety Check
+                                px_tile = int(self.player.x / constants.TILE_SIZE)
+                                py_tile = int(self.player.y / constants.TILE_SIZE)
+                                logger.info(f"Game loaded from {slot}.")
+                            else:
+                                logger.warning("No save found in slot.")
+                                # Maybe stay in menu or show error?
+                                self.state_manager.set_state(constants.STATE_MENU)
 
             elif current_state == constants.STATE_PAUSE:
                 if not hasattr(self, 'pause_menu'):
@@ -273,8 +266,9 @@ class Game:
                     self.player.recalculate_stats()
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_F9:
                     # Load Game
-                    loaded_player = self.save_load_system.load_game(self.current_profile, self.asset_manager)
-                    if loaded_player:
+                    result = self.save_load_system.load_game(self.current_profile, self.asset_manager)
+                    if result:
+                        loaded_player, map_seed = result
                         self.player = loaded_player
                         # Re-link player to game map if needed (not strictly needed as player has x,y)
                         # But we need to ensure all_bots has the new player
@@ -635,17 +629,34 @@ class Game:
                                 if torso:
                                     _, _, torso_exits = torso.simulate_flow()
                                     # Determine which exit feeds this component
-                                    if current_comp.slot == "right_arm":
-                                        input_context = torso_exits.get(0) # East
-                                    elif current_comp.slot == "left_arm":
-                                        input_context = torso_exits.get(3) # West
+                                    slot = current_comp.slot
+                                    dir_idx = -1
                                     
+                                    if slot == "right_arm": dir_idx = 0
+                                    elif slot == "left_arm": dir_idx = 3
+                                    elif slot == "head": dir_idx = 1 # NE (Yellow Diamond)
+                                    elif slot == "back": dir_idx = 2 # NW (Purple Square)
+                                    
+                                    elif "leg" in slot:
+                                        if "right" in slot: dir_idx = 5
+                                        else: dir_idx = 4
+                                    
+                                    if dir_idx != -1:
+                                        input_context = torso_exits.get(dir_idx)
+                                    
+                                    # FALLBACK: Use Wireless Power if context is missing but Core exists
+                                    if not input_context and torso.core:
+                                        from hex_system.energy_packet import ProjectileContext
+                                        base_mag = torso.core.generation_rate * 0.5
+                                        input_context = ProjectileContext(synergies={torso.core.core_type: base_mag})
+                                        logger.info(f"  -> Using Wireless Fallback for {slot} (50% efficiency)")
+
                                     # Debug Log
                                     logger.info(f"Opening Editor for {current_comp.slot}. Torso Exits: {list(torso_exits.keys())}")
                                     if input_context:
                                         logger.info(f"  -> Found Context: {input_context.synergies}")
                                     else:
-                                        logger.info(f"  -> NO Context found for direction {0 if current_comp.slot == 'right_arm' else 3}")
+                                        logger.info(f"  -> NO Context found for direction {dir_idx}")
                             
                             self.hex_editor = ComponentHexEditor(current_comp, self.screen, input_context=input_context)
                             self.state_manager.set_state(constants.STATE_HEX_EDITOR)
@@ -665,6 +676,14 @@ class Game:
         if current_state == constants.STATE_PLAY and self.player:
             self.update_player_movement(dt)
             self.player.update(dt)
+            
+            # Auto-Fire for Orbital Mode (Z-Key)
+            if getattr(self.player, "orbital_mode", False):
+                mx, my = pygame.mouse.get_pos()
+                world_x = mx - self.camera_x
+                world_y = my - self.camera_y
+                current_time = pygame.time.get_ticks() / 1000.0
+                self.player.shoot(world_x, world_y, self.combat_system, current_time)
             
             # Update Music based on Biome
             self.music_check_timer += dt
@@ -754,6 +773,9 @@ class Game:
             self.draw_play_ui()
         elif current_state == constants.STATE_MENU:
             self.main_menu.draw()
+        elif current_state == constants.STATE_SAVE_SLOT:
+            if hasattr(self, 'save_slot_menu'):
+                self.save_slot_menu.draw()
         elif current_state == constants.STATE_PAUSE:
             # Draw game behind it (optional, but looks nice)
             if self.player and self.game_map:

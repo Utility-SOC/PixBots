@@ -20,6 +20,7 @@ STATE_COMBAT = "combat"
 STATE_EQUIPMENT = "equipment"
 STATE_REACTOR = "reactor"  # Debug reactor menu
 STATE_HELP = "help"
+STATE_SAVE_SLOT = "save_slot"
 
 # Combat Constants
 PROJECTILE_SPEED = 300

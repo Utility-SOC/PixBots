@@ -187,6 +187,13 @@ class CombatSystem:
         # Update Projectiles
         for p in self.projectiles:
             p.update(dt)
+
+            # S4: Time-based Detonation
+            if p.active and p.effects and "detonation_time" in p.effects:
+                p.effects["detonation_time"] -= dt
+                if p.effects["detonation_time"] <= 0:
+                    p.active = False
+                    self._trigger_explosion(p, all_bots)
             
             # Vortex Projectile Continuous Drag
             if p.active and p.effects and p.effects.get("synergy_name") == "vortex":
@@ -327,34 +334,16 @@ class CombatSystem:
                                              other_bot.y += (dy / dist) * pull
         
                             if synergy == "explosion":
-                                # Explosion logic: Push away + Damage
-                                explosion_radius = 150.0
-                                explosion_force = 500.0
-                                self.visual_effects.append(VisualEffect(
-                                    "implosion", p.x, p.y, radius=explosion_radius, duration=0.2 # Reuse implosion visual for now
-                                ))
-                                
-                                for other_bot in all_bots:
-                                    if p.owner == "player" and other_bot.name == "Player": continue
-                                    if p.owner == "enemy" and other_bot.name != "Player": continue
-                                    
-                                    dx = other_bot.x - p.x
-                                    dy = other_bot.y - p.y
-                                    dist_sq = dx*dx + dy*dy
-                                    if dist_sq < explosion_radius**2:
-                                        dist = math.sqrt(dist_sq)
-                                        if dist < 1: dist = 1
-                                        angle = math.atan2(dy, dx)
-                                        other_bot.knockback(explosion_force, angle)
-                                        other_bot.take_damage(p.damage * 0.5)
-        
+                                self._trigger_explosion(p, all_bots)
+
                             if synergy == "kinetic":
                                 # Kinetic Knockback
                                 knockback_force = 300.0
                                 bot.knockback(knockback_force, p.angle)
     
-                            # Vampiric
-                            if synergy == "vampiric":
+                            # Vampiric (Check both dominant and background synergies)
+                            active_synergies = p.effects.get("active_synergies", [])
+                            if synergy == "vampiric" or "vampiric" in active_synergies:
                                 # Formula: Healing = (Base_Rarity_Percentage) * (Reactor_Power / 100)
                                 # Base Rarity Percentage: Common=5%, Uncommon=10%, Rare=15%, Epic=20%, Legendary=25%
                                 rarity = p.effects.get("rarity", "Common")
@@ -500,3 +489,26 @@ class CombatSystem:
     def spawn_zone_effect(self, effect_type, x, y, radius, duration, **kwargs):
         z = ZoneEffect(effect_type, x, y, radius, duration, **kwargs)
         self.zone_effects.append(z)
+
+    def _trigger_explosion(self, p, all_bots):
+        """Trigger an explosion effect from a projectile."""
+        # Explosion logic: Push away + Damage
+        explosion_radius = 150.0
+        explosion_force = 500.0
+        self.visual_effects.append(VisualEffect(
+            "implosion", p.x, p.y, radius=explosion_radius, duration=0.2 
+        ))
+        
+        for other_bot in all_bots:
+            if p.owner == "player" and other_bot.name == "Player": continue
+            if p.owner == "enemy" and other_bot.name != "Player": continue
+            
+            dx = other_bot.x - p.x
+            dy = other_bot.y - p.y
+            dist_sq = dx*dx + dy*dy
+            if dist_sq < explosion_radius**2:
+                dist = math.sqrt(dist_sq)
+                if dist < 1: dist = 1
+                angle = math.atan2(dy, dx)
+                other_bot.knockback(explosion_force, angle)
+                other_bot.take_damage(p.damage * 0.5)

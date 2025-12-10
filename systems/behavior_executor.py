@@ -95,13 +95,32 @@ class BehaviorExecutor:
     
     # ===== MOVEMENT BEHAVIORS =====
     
+    def _get_target_pos(self, enemy, player):
+        """Calculates perceived target position, accounting for Cloak."""
+        tx, ty = player.x, player.y
+        
+        # Check against player's cloak state
+        if getattr(player, "is_cloaked", False):
+            # Apply "Estimation Error" / Aggro Drop
+            # Enemies guess randomly around the player
+            # Bosses/Ambushers might have better tracking (less noise), but for now generic:
+            import random
+            noise_range = 300 # Significant error
+            tx += random.uniform(-noise_range, noise_range)
+            ty += random.uniform(-noise_range, noise_range)
+            
+        return tx, ty
+
+    # ===== MOVEMENT BEHAVIORS =====
+    
     def _execute_move_toward(self, enemy, params, player, current_time):
         """Simple move toward target."""
         speed_mult = params.get("speed_multiplier", 1.0)
         min_dist = params.get("min_distance", 50)
         
-        dx = player.x - enemy.x
-        dy = player.y - enemy.y
+        tx, ty = self._get_target_pos(enemy, player)
+        dx = tx - enemy.x
+        dy = ty - enemy.y
         dist = math.sqrt(dx**2 + dy**2)
         
         if dist > min_dist:
@@ -115,8 +134,9 @@ class BehaviorExecutor:
         min_range = params.get("min_range", 350)
         retreat_speed = params.get("retreat_speed", 1.1)
         
-        dx = player.x - enemy.x
-        dy = player.y - enemy.y
+        tx, ty = self._get_target_pos(enemy, player)
+        dx = tx - enemy.x
+        dy = ty - enemy.y
         dist = math.sqrt(dx**2 + dy**2)
         
         if dist < min_range:
@@ -135,8 +155,9 @@ class BehaviorExecutor:
         speed_mult = params.get("speed_multiplier", 1.4)
         
         # Calculate perpendicular vector
-        dx = player.x - enemy.x
-        dy = player.y - enemy.y
+        tx, ty = self._get_target_pos(enemy, player)
+        dx = tx - enemy.x
+        dy = ty - enemy.y
         
         # Rotate 90 degrees
         if direction == "left":
@@ -199,8 +220,9 @@ class BehaviorExecutor:
                 return False
         
         # Check range
-        dx = player.x - enemy.x
-        dy = player.y - enemy.y
+        tx, ty = self._get_target_pos(enemy, player)
+        dx = tx - enemy.x
+        dy = ty - enemy.y
         dist = math.sqrt(dx**2 + dy**2)
         
         if dist < 60:  # Melee range

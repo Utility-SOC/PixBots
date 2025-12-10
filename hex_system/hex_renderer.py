@@ -69,7 +69,9 @@ class HexRenderer:
                  pygame.draw.line(self.screen, (255, 255, 255), (center_x, center_y), (end_x, end_y), 3)
 
             # Add tile name to the hex
-            self.draw_hex_text(coord, tile.name.split(" ")[0], (0, 0, 0))
+            # Use full name, simplified for secondary systems
+            display_name = tile.name.split(" ")[0] if " " in tile.name and len(tile.name) > 8 else tile.name
+            self.draw_hex_text(coord, display_name, (0, 0, 0))
 
     def _draw_direction_arrow(self, center: Tuple[float, float], direction: int, color: tuple = (255, 255, 255)):
         cx, cy = center
@@ -100,11 +102,14 @@ class HexRenderer:
 
     def draw_flow_overlay(self, flows: List[Tuple[HexCoord, HexCoord, Dict]], valid_coords: set[HexCoord] = None):
         """
-        Draws energy flow lines on top of the grid.
+        Draws energy flow lines on top of the grid with high-fidelity effects (H6).
         flows: List of (start_coord, end_coord, synergy_mix_dict)
-        valid_coords: Set of valid hex coordinates. If provided, lines to invalid coords will be clipped.
+        valid_coords: Set of valid hex coordinates.
         """
         from hex_system.energy_packet import SynergyType
+        from systems.energy_system import EnergySystem
+        
+        current_time = pygame.time.get_ticks() / 1000.0
         
         synergy_colors = {
             SynergyType.FIRE: (255, 100, 50),
@@ -125,118 +130,144 @@ class HexRenderer:
             
             is_exit = valid_coords is not None and end not in valid_coords
             
-            # Filter significant synergies (> 1.0 magnitude) and sort by magnitude
+            # H5/H6: Use Normalized Magnitude
+            raw_mag = sum(v for k,v in mix.items())
+            norm_mag = EnergySystem.calculate_flow(raw_mag) # 0-1000
+            
+            # Filter significant synergies and sort
             active_synergies = [(k, v) for k, v in mix.items() if v > 1.0]
-            active_synergies.sort(key=lambda x: x[1], reverse=True)
-            
-            # Limit to top 3 to avoid clutter
-            active_synergies = active_synergies[:3]
-            
             if not active_synergies: continue
-            
+            active_synergies.sort(key=lambda x: x[1], reverse=True)
+            active_synergies = active_synergies[:3]
+
             count = len(active_synergies)
-            spacing = 4 # pixels between lines
-            total_width = (count - 1) * spacing
+            # Center-Dominant Layout strategy
+            # We want the Dominant synergy (Index 0) to be in the Center and drawn LAST (Top).
+            # Others on sides.
             
-            # Calculate perpendicular vector for offset
+            # Prepare render items: (Synergy, Mag, OffsetMultiplier, Z-Index)
+            render_items = []
+            
+            # --- Vector Calculations (Restored) ---
             dx = end_x - start_x
             dy = end_y - start_y
             length = math.sqrt(dx*dx + dy*dy)
             if length == 0: continue
             
-            ux = dx / length
-            uy = dy / length
-            px = -uy
-            py = ux
+            ux, uy = dx/length, dy/length
+            px, py = -uy, ux # Perpendicular vector
             
-            # If exiting, shorten the line to the edge of the start hex
             if is_exit:
-                # Hex radius is self.hex_size. Distance to edge is approx hex_size * 0.866 (sqrt(3)/2)
-                # Let's go to 0.9 * hex_size
                 clip_dist = self.hex_size * 0.9
                 end_x = start_x + ux * clip_dist
                 end_y = start_y + uy * clip_dist
+            # --------------------------------------
+
+            # Restore Pulse and Intensity
+            pulse_freq = 5.0
+            intensity = norm_mag / 1000.0
+
+            if count == 1:
+                render_items.append((active_synergies[0][0], active_synergies[0][1], 0.0))
+            elif count == 2:
+                # Big (0) at +0.5, Small (1) at -0.5
+                # Draw Small first, then Big
+                render_items.append((active_synergies[1][0], active_synergies[1][1], -0.5))
+                render_items.append((active_synergies[0][0], active_synergies[0][1], 0.5))
+            elif count >= 3:
+                # Big (0) at 0.
+                # Med (1) at -1.
+                # Small (2) at +1.
+                # Draw Med/Small first, then Big.
+                render_items.append((active_synergies[1][0], active_synergies[1][1], -1.0))
+                render_items.append((active_synergies[2][0], active_synergies[2][1], 1.0))
+                render_items.append((active_synergies[0][0], active_synergies[0][1], 0.0))
             
-            for i, (syn_type, magnitude) in enumerate(active_synergies):
-                offset = (i * spacing) - (total_width / 2)
+            # Cap spacing to prevent wide separation
+            base_spacing = min(8, max(4, int(norm_mag / 150))) 
+            
+            for i, (syn_type, magnitude, offset_mult) in enumerate(render_items):
+                offset = offset_mult * base_spacing
                 
-                # Offset start and end points
-                sx = start_x + px * offset
-                sy = start_y + py * offset
-                ex = end_x + px * offset
-                ey = end_y + py * offset
+                sx, sy = start_x + px * offset, start_y + py * offset
+                ex, ey = end_x + px * offset, end_y + py * offset
                 
-                color = synergy_colors.get(syn_type, (200, 200, 200))
+                base_color = synergy_colors.get(syn_type, (200, 200, 200))
                 
-                # Draw line (thickness based on magnitude, clamped)
-                thickness = max(2, min(5, int(magnitude / 10)))
-                pygame.draw.line(self.screen, color, (sx, sy), (ex, ey), thickness)
+                # Apply Pulse
+                # Temporal offset: i is render order. 
+                # To sync "Red First, Then Blue", we want consistent phase based on synergy type?
+                # Or just render order.
+                # Let's use render order phase shift.
+                local_pulse = (math.sin(current_time * pulse_freq - i * 1.5) + 1) * 0.5
                 
-                # --- NEW: Highlight the shared edge (Entry Side) ---
-                # Find the shared edge between start and end hexes
-                # The direction from start to end determines which side of 'end' is entered.
-                # We can calculate the vertices of the 'end' hex that face the 'start' hex.
+                pulse_val = local_pulse * intensity * 0.8
+                color = (
+                    min(255, base_color[0] + int(pulse_val * 100)),
+                    min(255, base_color[1] + int(pulse_val * 100)),
+                    min(255, base_color[2] + int(pulse_val * 100))
+                )
+    
+                # H6: Size/Thickness properties
+                # Inner (Dominant) should be thickest?
+                is_dominant = (offset_mult == 0.0 and count != 2) or (count == 2 and offset_mult == 0.5)
                 
-                # Calculate angle from end to start (to find the entry side)
+                # CLAMP INTENSITY AND THICKNESS
+                # norm_mag is 0-1000 officially, but can go higher with huge damage.
+                # Cap effective intensity for drawing purposes.
+                clamped_intensity = min(intensity, 5.0) 
+                
+                base_thickness = max(2, int(2 + clamped_intensity * 2))
+                base_thickness = min(base_thickness, 12) # Hard cap at 12px
+                
+                if is_dominant: base_thickness += 2
+                
+                # Draw main line
+                pygame.draw.line(self.screen, color, (sx, sy), (ex, ey), base_thickness)
+                
+                # Particles
+                num_particles = max(1, int(intensity * 5))
+                particle_phase = (current_time * 1.5 - i * 0.2) % 1.0 
+                
+                for p in range(num_particles):
+                    phase = (particle_phase + p/num_particles) % 1.0
+                    p_x = sx + (ex - sx) * phase
+                    p_y = sy + (ey - sy) * phase
+                    
+                    p_size = base_thickness + 2
+                    pygame.draw.circle(self.screen, (255, 255, 255), (int(p_x), int(p_y)), p_size)
+
+                # Entry Edge Highlight (unchanged logic, just color update)
                 angle_to_start = math.atan2(start_y - end_y, start_x - end_x)
-                # Snap to nearest 60 degrees (hex sides)
-                # Hex sides are at 30, 90, 150, 210, 270, 330 degrees (if flat top?) 
-                # or 0, 60, 120... (if pointy top).
-                # Our hex_corners function starts at angle_deg=30 for i=0. So pointy top?
-                # Let's check hex_corners in hex_coord.py if needed, but assuming standard layout:
-                # We want the vertices closest to the start point.
-                
-                # Simple approach: Find the two vertices of 'end' hex that are closest to 'start' center.
                 end_corners = hex_corners(end_x, end_y, self.hex_size)
-                # Sort corners by distance to start_x, start_y
                 end_corners.sort(key=lambda p: (p[0]-start_x)**2 + (p[1]-start_y)**2)
+                c1, c2 = end_corners[0], end_corners[1]
                 
-                # The two closest corners form the entry edge
-                c1 = end_corners[0]
-                c2 = end_corners[1]
+                # Glowy edge
+                pygame.draw.line(self.screen, color, c1, c2, base_thickness + 2)
                 
-                # Draw a glowing line on this edge
-                pygame.draw.line(self.screen, color, c1, c2, 4)
-                # ---------------------------------------------------
-                
-                # Draw arrowhead or exit marker
                 if is_exit:
-                    # Draw a small "burst" or circle at the end to show exit
-                    pygame.draw.circle(self.screen, color, (int(ex), int(ey)), thickness + 2)
-                    # Maybe a small perpendicular line?
+                    pygame.draw.circle(self.screen, color, (int(ex), int(ey)), base_thickness + 2)
                     p_len = 6
                     pygame.draw.line(self.screen, (255, 255, 255), 
                                      (ex - px * p_len, ey - py * p_len), 
                                      (ex + px * p_len, ey + py * p_len), 2)
                     
-                    # NEW: Draw Input Indicator on the receiving hex edge
-                    # We know 'end' is the exit hex (Weapon Mount).
-                    # We know 'start' is where it came from.
-                    # We want to draw a small chevron on the edge between start and end.
-                    
-                    # Calculate edge midpoint
                     edge_mid_x = (start_x + end_x) / 2
                     edge_mid_y = (start_y + end_y) / 2
-                    
-                    # Move slightly towards end hex to be "inside" the target
                     indicator_offset = self.hex_size * 0.4
                     ind_x = edge_mid_x + ux * indicator_offset
                     ind_y = edge_mid_y + uy * indicator_offset
                     
-                    # Draw chevron pointing IN to the end hex
-                    # Vector is (ux, uy). Perpendicular is (px, py).
                     chev_size = 5
                     p1 = (ind_x - ux * chev_size + px * chev_size, ind_y - uy * chev_size + py * chev_size)
                     p2 = (ind_x, ind_y)
                     p3 = (ind_x - ux * chev_size - px * chev_size, ind_y - uy * chev_size - py * chev_size)
-                    
                     pygame.draw.lines(self.screen, (255, 255, 255), False, [p1, p2, p3], 2)
-
                 else:
-                    # Draw small arrowhead at 2/3 distance
                     arrow_pos_x = sx + (ex - sx) * 0.66
                     arrow_pos_y = sy + (ey - sy) * 0.66
-                    pygame.draw.circle(self.screen, color, (int(arrow_pos_x), int(arrow_pos_y)), thickness)
+                    pygame.draw.circle(self.screen, color, (int(arrow_pos_x), int(arrow_pos_y)), base_thickness)
 
     def draw_marker_shape(self, center: Tuple[float, float], shape_type: str, color: tuple, size: int = 20):
         """Draws a specific shape marker at the given center coordinates."""

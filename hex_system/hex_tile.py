@@ -17,6 +17,17 @@ class TileCategory(Enum):
     OUTPUT = "output"
     SPECIAL = "special"
 
+class TargetSystem(Enum):
+    SHIELD = "SHIELD"
+    CLOAK = "CLOAK"
+    ORBITAL = "ORBITAL"
+    SUCM = "SUCM"
+    ROCKET_LEGS = "ROCKET_LEGS"
+
+class TriggerMode(Enum):
+    TOGGLE = "TOGGLE"
+    MOMENTARY = "MOMENTARY"
+
 @dataclass
 class HexTile:
     tile_type: str = "Generic"
@@ -34,7 +45,7 @@ class HexTile:
     def __post_init__(self):
         if not self.name: self.name = self.tile_type
 
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         """
         Processes the projectile context.
         Returns a list of contexts (usually just the modified original, but splitters return multiple).
@@ -73,6 +84,15 @@ class HexTile:
         elif class_name == "ReflectorTile": cls = ReflectorTile
         elif class_name == "FilterTile": cls = FilterTile
         elif class_name == "ReactorTile": cls = ReactorTile
+        elif class_name == "OrbitalModulatorTile": cls = OrbitalModulatorTile
+        elif class_name == "DetonationTriggerTile": cls = DetonationTriggerTile
+        elif class_name == "SecondaryOutputTile": cls = SecondaryOutputTile
+        elif class_name == "ShieldGenTile": cls = ShieldGenTile
+        elif class_name == "CloakTile": cls = CloakTile
+        elif class_name == "AcceleratorTile": cls = AcceleratorTile
+        elif class_name == "HipsTile": cls = HipsTile
+        elif class_name == "KneesTile": cls = KneesTile
+        elif class_name == "AnklesTile": cls = AnklesTile
         
         # Create instance
         instance = cls()
@@ -118,7 +138,7 @@ class BasicConduitTile(HexTile):
     def set_exit_direction(self, direction: int):
         self.exit_direction = direction % 6
     
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         # Conduits can have a merge bonus too!
         if self.merge_bonus > 0:
              from .energy_packet import ProjectileModifier
@@ -164,9 +184,9 @@ class AmplifierTile(BasicConduitTile):
         self.tile_type = "Amplifier"
         self.base_color = (255, 200, 100)
 
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         # Call super to handle merge bonus!
-        contexts = super().process_energy(context, from_direction)
+        contexts = super().process_energy(context, from_direction, valid_exits)
         context = contexts[0]
         
         from .energy_packet import ProjectileModifier
@@ -179,12 +199,12 @@ class AmplifierTile(BasicConduitTile):
             operation="multiply"
         ))
         
-        # Apply Synergies
+        # Apply Synergies PROPORTIONALLY
+        current_mag = context.get_total_magnitude()
         for synergy in self.synergies:
-            # Add synergy magnitude. 
-            # Amount? Maybe proportional to amplification? or fixed?
-            # Let's add a fixed amount for now, e.g. 20.0
-            context.add_synergy(synergy, 20.0)
+            # Add 25% of current magnitude as the new synergy type
+            # This ensures it scales with weapon power
+            context.add_synergy(synergy, current_mag * 0.25)
             
         return [context]
 
@@ -212,13 +232,14 @@ class ResonatorTile(HexTile):
             self.synergies = [SynergyType.ICE]
         super().__post_init__()
         
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
-        # Resonators add their synergy to the context
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # Resonators add their synergy to the context PROPORTIONALLY
+        current_mag = context.get_total_magnitude()
         for synergy in self.synergies:
-            context.add_synergy(synergy, 20.0)
+             # Add 30% of current magnitude
+            context.add_synergy(synergy, current_mag * 0.3)
             
         # Interaction Buff: If context has multiple synergies, amplify damage
-        # This simulates "interacting streams" getting a bonus
         if len(context.synergies) > 1:
              from .energy_packet import ProjectileModifier
              context.add_modifier(ProjectileModifier(stat="damage", value=1.1, operation="multiply"))
@@ -245,47 +266,38 @@ class SplitterTile(HexTile):
         self.base_color = (150, 200, 150)
         super().__post_init__()
     
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
-        # Splitter creates clones for all paths
-        # We need to return as many contexts as we have exit directions
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # R1: Smart Splitter Logic
+        active_exits = self.exit_directions
+        if valid_exits is not None:
+             # Filter exits that are in our configured list AND are valid
+             active_exits = [d for d in self.exit_directions if d in valid_exits]
         
-        num_exits = len(self.exit_directions)
-        if num_exits == 0:
-            return []
+        count = len(active_exits)
+        if count == 0:
+            return [] 
             
-        # Calculate split penalty/division
-        # If we have N exits, do we divide damage by N?
-        # User wants "5 particles for 5 streams".
-        # If we divide by 5, each is weak.
-        # But merge bonus helps.
-        # Let's keep the logic: 0.5 base penalty, improved by merge.
-        # But if N > 2, maybe we should scale it?
-        # Let's stick to the previous formula for now, but maybe cap it?
-        # split_penalty = 0.5 + (self.merge_bonus * 0.5)
-        
-        # Actually, if we split 6 ways, 0.5 damage each is 3.0x total damage. That's OP.
-        # We should probably divide by (N/2) or something?
-        # Or just let it be OP for now. It's a "Legendary" mechanic.
-        
-        split_penalty = 0.5 + (self.merge_bonus * 0.5)
-        split_penalty = min(1.0, split_penalty)
-        
-        # If more than 2 exits, maybe reduce further?
-        # e.g. if 6 exits, 0.5 * 6 = 3.0.
-        # If we want to conserve energy, it should be 1/N.
-        # But "Splitter" usually implies some multiplication/efficiency gain in these games.
-        # Let's leave it as is.
-        
-        from .energy_packet import ProjectileModifier
-        mod = ProjectileModifier(stat="damage", value=split_penalty, operation="multiply")
-        
         results = []
-        for _ in range(num_exits):
-            new_ctx = context.clone()
-            new_ctx.add_modifier(mod)
+        import copy
+        
+        # Smart Redistribution: 100% efficiency distributed among valid exits
+        ratio = 1.0 / count
+        
+        for _ in range(count):
+            new_ctx = copy.deepcopy(context)
+            if new_ctx.damage_multiplier > 0:
+                new_ctx.damage_multiplier *= ratio
+            
+            for k in new_ctx.synergies:
+                new_ctx.synergies[k] *= ratio
+            
             results.append(new_ctx)
         
         return results
+
+    def get_active_exits(self, valid_exits: list = None) -> List[int]:
+        if valid_exits is None: return self.exit_directions
+        return [d for d in self.exit_directions if d in valid_exits]
     
     def get_exit_directions(self, entry_direction: int) -> List[int]:
         """Returns configured exit directions."""
@@ -332,7 +344,7 @@ class WeaponMountTile(HexTile):
         self.category = TileCategory.OUTPUT
         self.base_color = (255, 100, 100)
         super().__post_init__()
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         # Pass through so simulate_flow can detect it exiting the component
         return [context]
 
@@ -355,7 +367,7 @@ class ReflectorTile(HexTile):
         self.base_color = (200, 200, 255) # Mirror-ish
         super().__post_init__()
         
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         # Split context based on target synergy
         pass_context = context.clone()
         reflect_context = context.clone()
@@ -409,7 +421,223 @@ class ReactorTile(HexTile):
         self.description = "Generates energy. Source of power."
         super().__post_init__()
     
-    def process_energy(self, context: 'ProjectileContext', from_direction: int) -> List['ProjectileContext']:
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
         return [context]
 
+@dataclass
+class OrbitalModulatorTile(HexTile):
+    orbit_radius: float = 0.5
+    particle_ttl: float = 3.0
+    orbit_speed: float = 1.0
 
+    def __post_init__(self):
+        self.tile_type = "Orbital Modulator"
+        self.category = TileCategory.PROCESSOR
+        self.base_color = (100, 255, 255) # Cyan-ish
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # S5: Add orbital configuration
+        context.custom_effects["orbital_config"] = {
+            "radius": self.orbit_radius * 100.0, # Convert internal unit to pixels if needed, or assume scaling
+            "speed": self.orbit_speed,
+            "ttl": self.particle_ttl,
+            "period": 0.0 # calculated elsewhere
+        }
+        return [context]
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["orbit_radius"] = self.orbit_radius
+        d["particle_ttl"] = self.particle_ttl
+        d["orbit_speed"] = self.orbit_speed
+        return d
+
+    def restore_from_dict(self, data: dict):
+        self.orbit_radius = data.get("orbit_radius", 0.5)
+        self.particle_ttl = data.get("particle_ttl", 3.0)
+        self.orbit_speed = data.get("orbit_speed", 1.0)
+
+@dataclass
+class DetonationTriggerTile(HexTile):
+    trigger_time: float = 1.0
+
+    def __post_init__(self):
+        self.tile_type = "Detonation Trigger"
+        self.category = TileCategory.PROCESSOR
+        self.base_color = (255, 150, 50) # Orange
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # S4: Add detonation timer
+        context.custom_effects["detonation_time"] = self.trigger_time
+        return [context]
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["trigger_time"] = self.trigger_time
+        return d
+
+    def restore_from_dict(self, data: dict):
+        self.trigger_time = data.get("trigger_time", 1.0)
+
+@dataclass
+class SecondaryOutputTile(HexTile):
+    target_system: TargetSystem = TargetSystem.SHIELD
+    trigger_mode: TriggerMode = TriggerMode.MOMENTARY
+
+    def __post_init__(self):
+        self.tile_type = "Secondary Output"
+        self.category = TileCategory.OUTPUT
+        self.base_color = (50, 50, 200) # Dark Blue
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # Secondary Systems consume ~80% of energy passing through them for activation.
+        # The remaining 20% continues flow.
+        
+        consumption_rate = 0.8
+        
+        # Create output context (the flow continuing downstream)
+        # Use clone() as copy() might not be detected in some load states
+        out_context = context.clone()
+        
+        # Scale down output synergies
+        for s in out_context.synergies:
+            out_context.synergies[s] *= (1.0 - consumption_rate)
+            
+        # Record consumed energy in the output context's custom effects
+        # This allows component.py to read "consumed_energy" and apply it to the system.
+        consumed_mag = context.get_total_magnitude() * consumption_rate
+        
+        if not hasattr(out_context, "custom_effects"):
+            out_context.custom_effects = {}
+            
+        out_context.custom_effects[f"system_{self.target_system.value}_charge"] = consumed_mag
+        
+        return [out_context]
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["target_system"] = self.target_system.value
+        d["trigger_mode"] = self.trigger_mode.value
+        return d
+
+    def restore_from_dict(self, data: dict):
+        try:
+            self.target_system = TargetSystem(data.get("target_system", "SHIELD"))
+        except ValueError:
+            self.target_system = TargetSystem.SHIELD
+            
+        try:
+            self.trigger_mode = TriggerMode(data.get("trigger_mode", "MOMENTARY"))
+        except ValueError:
+            self.trigger_mode = TriggerMode.MOMENTARY
+
+
+
+@dataclass
+class ShieldGenTile(SecondaryOutputTile):
+    """Activates Shield when powered."""
+    def __post_init__(self):
+        super().__post_init__()
+        self.tile_type = "Shield Generator"
+        self.name = "Shield" 
+        self.description = "Generates a protective forcefield."
+        self.target_system = TargetSystem.SHIELD
+        self.base_color = (50, 50, 255) # Blue
+
+@dataclass
+class CloakTile(SecondaryOutputTile):
+    """Activates Cloak when powered."""
+    def __post_init__(self):
+        super().__post_init__()
+        self.tile_type = "Cloak Module"
+        self.name = "Cloak"
+        self.description = "Renders the bot invisible."
+        self.target_system = TargetSystem.CLOAK
+        self.base_color = (50, 50, 50) # Dark Grey
+
+@dataclass
+class AcceleratorTile(SecondaryOutputTile):
+    """Activates Speed Boost when powered."""
+    def __post_init__(self):
+        super().__post_init__()
+        self.tile_type = "Accelerator"
+        self.name = "Boost"
+        self.description = "Boosts movement speed temporarily."
+        self.target_system = TargetSystem.ROCKET_LEGS # Maps to Rocket Legs logic
+        self.base_color = (255, 50, 50) # Red
+
+@dataclass
+class HipsTile(HexTile):
+    """Converts energy into Movement Speed."""
+    efficiency: float = 1.0
+
+    def __post_init__(self):
+        self.tile_type = "Hips Joint"
+        self.name = "Hips"
+        self.description = "Converts energy into Movement Speed."
+        self.category = TileCategory.OUTPUT
+        self.base_color = (200, 200, 50) # Yellow-ish
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        # Absorbs energy
+        return []
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["efficiency"] = self.efficiency
+        return d
+
+    def restore_from_dict(self, data: dict):
+        self.efficiency = data.get("efficiency", 1.0)
+
+@dataclass
+class KneesTile(HexTile):
+    """Converts energy into Acceleration/Turn Speed."""
+    efficiency: float = 1.0
+
+    def __post_init__(self):
+        self.tile_type = "Knee Servo"
+        self.name = "Knees"
+        self.description = "Converts energy into Turn Speed."
+        self.category = TileCategory.OUTPUT
+        self.base_color = (150, 100, 255) # Purple-ish
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        return []
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["efficiency"] = self.efficiency
+        return d
+
+    def restore_from_dict(self, data: dict):
+        self.efficiency = data.get("efficiency", 1.0)
+
+@dataclass
+class AnklesTile(HexTile):
+    """Converts energy into Stability/Braking."""
+    efficiency: float = 1.0
+
+    def __post_init__(self):
+        self.tile_type = "Ankle Pivot"
+        self.name = "Ankles"
+        self.description = "Converts energy into Stability/Braking."
+        self.category = TileCategory.OUTPUT
+        self.base_color = (50, 200, 200) # Cyan/Teal
+        super().__post_init__()
+
+    def process_energy(self, context: 'ProjectileContext', from_direction: int, valid_exits: list = None) -> List['ProjectileContext']:
+        return []
+
+    def to_dict(self) -> dict:
+        d = super().to_dict()
+        d["efficiency"] = self.efficiency
+        return d
+
+    def restore_from_dict(self, data: dict):
+        self.efficiency = data.get("efficiency", 1.0)

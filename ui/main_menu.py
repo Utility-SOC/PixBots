@@ -42,6 +42,10 @@ class MainMenu:
                 for action, rect in self.buttons.items():
                     if rect.collidepoint(event.pos):
                         logger.info(f"Main menu button '{action}' clicked.")
+                        if action == "new_game":
+                            return "select_slot_new"
+                        elif action == "load_game":
+                            return "select_slot_load"
                         return action
         return None
 

@@ -199,6 +199,8 @@ class Bot:
                 self.total_armor += stats.get("armor", 0)
                 self.max_hp += stats.get("hp", 0)
                 self.speed_bonus += stats.get("speed", 0)
+                # S7: Leg Sinks
+                self.speed_bonus += stats.get("movement_speed_bonus", 0.0)
         # Logarithmic scaling: 150 base, + 50 * log(bonus + 1)
         # If bonus is 1 (common leg), speed = 150 + 50 * 0.69 = 185
         # If bonus is 10 (many upgrades), speed = 150 + 50 * 2.39 = 270
@@ -234,11 +236,31 @@ class Bot:
             self.sprite = self.asset_manager.get_image(self.sprite_name)
             if self.sprite:
                 self.mask = pygame.mask.from_surface(self.sprite)
+        
+        # Debug: Check for missing sprite
+        if self.sprite is None and self.name == "Player" and (pygame.time.get_ticks() % 1000) < 20:
+             import logging
+             logger = logging.getLogger(__name__)
+             logger.warning(f"Player Sprite is MISSING! AssetManager: {self.asset_manager is not None}")
 
         if self.sprite:
             sx = int(self.x + offset_x - self.sprite.get_width() / 2)
             sy = int(self.y + offset_y - self.sprite.get_height() / 2)
-            screen.blit(self.sprite, (sx, sy))
+            
+            # Support Transparency (Cloak)
+            current_alpha = getattr(self, 'alpha', 255)
+            # Log once every ~1 second (1000ms)
+            if self.name == "Player" and (pygame.time.get_ticks() % 1000) < 20: 
+                 import logging
+                 logger = logging.getLogger(__name__)
+                 logger.debug(f"Rendering Player: Alpha={current_alpha}, Pos=({self.x:.1f},{self.y:.1f})")
+
+            if current_alpha < 255:
+                self.sprite.set_alpha(current_alpha)
+                screen.blit(self.sprite, (sx, sy))
+                self.sprite.set_alpha(255) # Reset for others
+            else:
+                 screen.blit(self.sprite, (sx, sy))
             
             # Render Status Effects
             if self.status_effects:

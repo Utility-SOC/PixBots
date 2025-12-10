@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 from hex_system.hex_coord import HexCoord
 # FIX: Import TileCategory to be used when creating tiles
-from hex_system.hex_tile import HexTile, AmplifierTile, ResonatorTile, SplitterTile, WeaponMountTile, TileCategory
+from hex_system.hex_tile import HexTile, AmplifierTile, ResonatorTile, SplitterTile, WeaponMountTile, TileCategory, SecondaryOutputTile, HipsTile, KneesTile, AnklesTile
 from hex_system.energy_packet import SynergyType, EnergyCore
 from systems.synergy_manager import SynergyManager
 
@@ -27,8 +27,13 @@ class ComponentEquipment:
     base_speed: float = 0.0
     core: Optional[EnergyCore] = None
     max_tile_capacity: int = 9
+    max_tile_capacity: int = 9
     merge_count: int = 0
     background_image: Optional[object] = None 
+    
+    # R4: Accumulation
+    stored_energy: float = 0.0
+    accumulation_rate: float = 0.0 # Calculated per frame/update from flow 
 
     def __post_init__(self):
         # If valid_coords is empty, default to rectangular grid based on quality
@@ -58,6 +63,33 @@ class ComponentEquipment:
             self.background_image = ProceduralGenerator.generate_hex_background(item_type, self.quality)
         except Exception:
             self.background_image = None
+
+    def update(self, dt: float):
+        """Update component state, primarily energy accumulation."""
+        if self.accumulation_rate > 0:
+            # Accumulate energy
+            self.stored_energy += self.accumulation_rate * dt
+            
+            # Cap at some reasonable max (e.g. 10x generation rate or fixed 1000 * level)
+            max_cap = 1000.0 * (1 + self.level)
+            if self.stored_energy > max_cap:
+                self.stored_energy = max_cap
+    
+    def consume_stored_energy(self, amount: Optional[float] = None) -> float:
+        """
+        Consumes stored energy. 
+        If amount is None, consumes ALL and returns it (Discharge).
+        If amount is specified, consumes up to amount and returns actual consumed.
+        """
+        if amount is None:
+            # Discharge all
+            v = self.stored_energy
+            self.stored_energy = 0.0
+            return v
+        else:
+            consumed = min(self.stored_energy, amount)
+            self.stored_energy -= consumed
+            return consumed
 
     def get_recycle_value(self) -> int:
         """Returns the number of shards obtained from recycling this item."""
@@ -114,7 +146,7 @@ class ComponentEquipment:
             # Exit at weapon mount (Right side of arm, max_q)
             entry_hex = min(self.valid_coords, key=lambda c: (abs(c.q - min_q) + abs(c.r - mid_r)))
             exit_hex = min(self.valid_coords, key=lambda c: (abs(c.q - max_q) + abs(c.r - mid_r)))
-        elif self.slot in ["left_leg", "right_leg"]:
+        elif self.slot in ["left_leg", "right_leg", "legs"]:
             # Entry top (min_r), Exit bottom (max_r)
             entry_hex = min(self.valid_coords, key=lambda c: (abs(c.r - min_r) + abs(c.q - mid_q)))
             exit_hex = min(self.valid_coords, key=lambda c: (abs(c.r - max_r) + abs(c.q - mid_q)))
@@ -165,9 +197,11 @@ class ComponentEquipment:
             "active_synergy_result": None,
             "active_synergy_effects": {},
             "weapon_damage": 0.0,
+            "transfer_rate": 0.0, # New stat for transfer output
             "active_tiles": 0
         }
-        exit_contexts = {} 
+        exit_contexts = {} # For Transfer (Conduits, etc)
+        weapon_exit_contexts = {} # For Actual Weapon Output 
         
         synergy_manager = SynergyManager()
         
@@ -192,17 +226,6 @@ class ComponentEquipment:
                     context = self.core.generate_context(direction)
                     if context is None or context.get_total_magnitude() <= 0: continue
                     
-                    dom_syn = context.get_dominant_synergy()
-                    # ... (colors logic omitted for brevity, will be preserved by context)
-                    # Actually we need to determine color here for the flow line
-                    synergy_colors = {
-                        SynergyType.FIRE: (255, 100, 50),
-                        SynergyType.ICE: (100, 200, 255),
-                        SynergyType.RAW: (200, 200, 200),
-                        SynergyType.VORTEX: (150, 50, 200),
-                        SynergyType.EXPLOSION: (255, 100, 50)
-                    }
-                    
                     next_coord = self._get_neighbor_in_direction(reactor_pos, direction)
                     if self._is_in_bounds(next_coord):
                         # Store the full synergy mix for visualization
@@ -212,33 +235,75 @@ class ComponentEquipment:
                     else:
                         exit_contexts[direction] = context
         
-        # Handle input context (for arms/legs/etc)
-        elif input_context and entry_hex:
-            # If we have an input context, it enters at entry_hex.
-            # input_direction is the side of entry_hex it enters FROM.
-            # So we start processing AT entry_hex with that entry direction.
+        elif input_context:
+            # ROBUST ENTRY SCAN for Components
+            # Instead of guessing one "center" hex, find ALL conduits on the interface edge.
+            entry_coords = []
             
-            if self._is_in_bounds(entry_hex):
-                # Visualization: Show flow entering the component
-                # We need a "virtual" previous coord to draw the line from
-                # If input_direction is 3 (West), previous coord is (-1, 0) relative to entry_hex
-                prev_coord = self._get_neighbor_in_direction(entry_hex, (input_direction + 3) % 6)
-                flows.append((prev_coord, entry_hex, input_context.synergies.copy()))
+            if self.valid_coords:
+                min_q = min(c.q for c in self.valid_coords)
+                max_q = max(c.q for c in self.valid_coords)
+                min_r = min(c.r for c in self.valid_coords)
+                max_r = max(c.r for c in self.valid_coords)
                 
-                start_contexts.append((entry_hex, input_direction, input_context))
+                candidates = []
+                
+                # Identify Edge Candidates based on Slot
+                if self.slot == "right_arm": # Input from West (Left side, min_q)
+                    candidates = [c for c in self.valid_coords if c.q == min_q]
+                elif self.slot == "left_arm": # Input from East (Right side, max_q)
+                    candidates = [c for c in self.valid_coords if c.q == max_q]
+                elif "leg" in self.slot: # Input from Top (min_r)
+                    candidates = [c for c in self.valid_coords if c.r == min_r]
+                elif self.slot == "head": # Input from Bottom (max_r)
+                    candidates = [c for c in self.valid_coords if c.r == max_r]
+                elif self.slot == "back": # Input from Right? (Checking get_entry_exit_hexes logic: max_q)
+                    candidates = [c for c in self.valid_coords if c.q == max_q]
+                
+                # Filter candidates to find valid inputs
+                from hex_system.hex_tile import TileCategory
+                for c in candidates:
+                    tile = self.tile_slots.get(c)
+                    if tile and (getattr(tile, "category", None) in [TileCategory.CONDUIT, TileCategory.ROUTER] 
+                                 or "conduit" in tile.tile_type.lower()
+                                 or "conductor" in tile.tile_type.lower()):
+                        entry_coords.append(c)
+            
+            # Fallback to legacy
+            if not entry_coords and entry_hex:
+                 entry_coords.append(entry_hex)
 
+            # Initialize Queue with ALL found entries
+            for e_hex in entry_coords:
+                 if self._is_in_bounds(e_hex):
+                    # Visual flow entering
+                    prev_coord = self._get_neighbor_in_direction(e_hex, (input_direction + 3) % 6)
+                    flows.append((prev_coord, e_hex, input_context.synergies.copy()))
+                    
+                    
+                    start_contexts.append((e_hex, input_direction, input_context))
 
         # Process the flow queue
         queue = start_contexts # Rename for clarity
         processed_coords = set() 
+        
+        # VISITED STATE: Track (coord, entry_dir) to prevent infinite loops
+        visited_states = set()
+        
         steps = 0
-        max_steps = 100
+        max_steps = 1000 # Safety Break
         
         max_damage_mult = 1.0
         
         while queue and steps < max_steps:
             steps += 1
             coord, entry_dir, context = queue.pop(0)
+            
+            # CYCLE DETECTION: If we've entered this tile from this direction before, stop.
+            state_key = (coord, entry_dir)
+            if state_key in visited_states:
+                continue
+            visited_states.add(state_key)
             
             if coord not in self.tile_slots:
                 continue
@@ -254,8 +319,53 @@ class ComponentEquipment:
             if context.damage_multiplier > max_damage_mult:
                 max_damage_mult = context.damage_multiplier
             
+            # R1: Smart Splitter Logic
+            valid_exits = None
+            if tile.tile_type == "Splitter" and hasattr(tile, "exit_directions"):
+                # Filter exits: Keep if (In Bounds AND Has Tile) OR (Out of Bounds = Transfer)
+                valid_exits = []
+                for d in tile.exit_directions:
+                    neighbor = self._get_neighbor_in_direction(coord, d)
+                    if not self._is_in_bounds(neighbor):
+                        valid_exits.append(d) # Transfer
+                    elif neighbor in self.tile_slots:
+                        valid_exits.append(d) # Valid internal connection
+                    # Else: In bounds but empty -> Skip (Smart)
+            
+            # --- PRE-EMPTIVE WEAPON CAPTURE ---
+            # Detect weapon immediately to bypass potential flow processing glitches
+            is_weapon = False
+            if hasattr(tile, "weapon_type"): is_weapon = True
+            elif tile.tile_type == "Weapon Mount": is_weapon = True
+            elif "weapon" in tile.tile_type.lower() or "weapon" in tile.name.lower(): is_weapon = True
+            else:
+                try:
+                    from hex_system.hex_tile import WeaponMountTile as WMT
+                    if isinstance(tile, WMT): is_weapon = True
+                except ImportError: pass
+                
+            if is_weapon:
+                # Calculate exit direction (standard pass-through: entry + 3)
+                exit_dir = (entry_dir + 3) % 6
+                # print(f"DEBUG: Pre-emptive Capture at {coord}. ExitDir={exit_dir}")
+                
+                target_dict = weapon_exit_contexts
+                if exit_dir in target_dict:
+                     existing = target_dict[exit_dir]
+                     for s, m in context.synergies.items():
+                         existing.synergies[s] = existing.synergies.get(s, 0.0) + m
+                     existing.damage_multiplier = max(existing.damage_multiplier, context.damage_multiplier)
+                     if hasattr(context, "custom_effects"):
+                         existing.custom_effects.update(context.custom_effects)
+                else:
+                    target_dict[exit_dir] = context
+                    
+                # Stop propagation for this beam
+                continue 
+            # ----------------------------------
+
             # Process energy through tile
-            out_contexts = tile.process_energy(context, entry_dir)
+            out_contexts = tile.process_energy(context, entry_dir, valid_exits=valid_exits)
             
             # Special handling for WeaponMountTile: It consumes energy to fire
             if isinstance(tile, WeaponMountTile):
@@ -269,22 +379,43 @@ class ComponentEquipment:
                         stats["weapon_inputs"] = set()
                     stats["weapon_inputs"].add(entry_dir)
                     
-                    # Debug Log
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.debug(f"WeaponMount hit! Mag: {out_ctx.get_total_magnitude()}, Mult: {out_ctx.damage_multiplier}, Added: {dmg_add}, Total: {stats['weapon_damage']}, Inputs: {len(stats['weapon_inputs'])}")
+                    # Track synergy magnitudes for R3 (Kinetic Spread)
+                    if "synergy_magnitudes" not in stats:
+                         stats["synergy_magnitudes"] = {}
+                    
+                    for syn_type, mag in out_ctx.synergies.items():
+                         key = syn_type.value
+                         stats["synergy_magnitudes"][key] = stats["synergy_magnitudes"].get(key, 0.0) + mag
+                    
+                    # R4: Accumulation Rate (Energy reaching weapon = Charge Rate)
+                    if "accumulation_rate" not in stats: stats["accumulation_rate"] = 0.0
+                    stats["accumulation_rate"] += dmg_add # Start with dmg_add logic (base flow)
                     
                     # Calculate active synergy
                     stats["active_synergy_result"] = synergy_manager.calculate_synergy(out_ctx)
                     stats["active_synergy_effects"] = stats["active_synergy_result"].effects
                 
                 # Weapon Mounts consume energy, so we stop propagation here for logic
-                # But for visualization, we might want to show it exiting?
-                # Let's stop propagation to be safe and avoid double counting if it exits.
                 continue
 
+            # S7: Leg Sink Tiles
+            if isinstance(tile, (HipsTile, KneesTile, AnklesTile)):
+                 # Use INPUT context because Sinks absorb energy (no output)
+                 magnitude = context.get_total_magnitude()
+                 
+                 if isinstance(tile, HipsTile):
+                     stats["movement_speed_bonus"] = stats.get("movement_speed_bonus", 0.0) + magnitude * tile.efficiency
+                 elif isinstance(tile, KneesTile):
+                     stats["turn_speed_bonus"] = stats.get("turn_speed_bonus", 0.0) + magnitude * tile.efficiency
+                 elif isinstance(tile, AnklesTile):
+                     stats["stability_bonus"] = stats.get("stability_bonus", 0.0) + magnitude * tile.efficiency
+                 
+                 continue # Stop propagation
+
             else:
-                if hasattr(tile, "get_exit_directions"):
+                if hasattr(tile, "get_active_exits"):
+                    exit_dirs = tile.get_active_exits(valid_exits)
+                elif hasattr(tile, "get_exit_directions"):
                     exit_dirs = tile.get_exit_directions(entry_dir)
                 else:
                     exit_dirs = [tile.get_exit_direction(entry_dir)]
@@ -308,27 +439,135 @@ class ComponentEquipment:
                     next_entry_dir = (exit_dir + 3) % 6
                     queue.append((next_coord, next_entry_dir, out_ctx))
                 else:
-                    exit_contexts[exit_dir] = out_ctx
+                    # Leaving component. Energy Transfer.
+                    target_dict = exit_contexts
+                    # Weapon Mounts handled above
+                    
+                    # Fix: Accumulate contexts instead of overwriting!
+                    if exit_dir in target_dict:
+                         # Merge logic: Add synergies, Max multiplier
+                         existing = target_dict[exit_dir]
+                         
+                         # Sum synergies
+                         for s, m in out_ctx.synergies.items():
+                             existing.synergies[s] = existing.synergies.get(s, 0.0) + m
+                             
+                         # Maximize multipliers
+                         existing.damage_multiplier = max(existing.damage_multiplier, out_ctx.damage_multiplier)
+                         
+                         # Merge custom effects
+                         if hasattr(out_ctx, "custom_effects"):
+                             if hasattr(existing, "custom_effects"):
+                                 existing.custom_effects.update(out_ctx.custom_effects)
+                             else:
+                                 # Upgrade legacy object on the fly
+                                 existing.custom_effects = out_ctx.custom_effects.copy()
+                    else:
+                        target_dict[exit_dir] = out_ctx
 
             # Accumulate synergies seen in this step
             for syn in context.synergies:
                 if context.synergies[syn] > 0:
                     stats["synergies"].add(syn)
             for out_ctx in out_contexts:
+                # Merge custom effects safely
+                if hasattr(out_ctx, "custom_effects"):
+                    stats["active_synergy_effects"].update(out_ctx.custom_effects)
+                elif hasattr(out_ctx, "synergies"): # Fallback for malformed contexts
+                     pass
+                    
                 for syn in out_ctx.synergies:
                     if out_ctx.synergies[syn] > 0:
                         stats["synergies"].add(syn)
+            
+            # --- AGGREGATE SECONDARY CHARGES ---
+            # Extract "system_X_charge" from contexts and sum into stats
+            if hasattr(context, "custom_effects"):
+                for key, val in context.custom_effects.items():
+                    if key.startswith("system_") and key.endswith("_charge"):
+                         # Add to stats (e.g. stats["system_SHIELD_charge"] += 50.0)
+                         stats[key] = stats.get(key, 0.0) + val
+            
+            for out_ctx in out_contexts:
+                if hasattr(out_ctx, "custom_effects"):
+                    for key, val in out_ctx.custom_effects.items():
+                         if key.startswith("system_") and key.endswith("_charge"):
+                              stats[key] = stats.get(key, 0.0) + val
 
         stats["synergies"] = list(stats["synergies"])
-        # Convert set to count for easier use
-        stats["synergies"] = list(stats["synergies"])
+        
+        # Populate weapon_inputs with ACTIVE WEAPON EXITS to trigger multishot in Player.shoot
+        # (Player.shoot uses len(weapon_inputs) to determine spread count)
+        if weapon_exit_contexts:
+             stats["weapon_inputs"] = list(weapon_exit_contexts.keys())
+        else:
+             stats["weapon_inputs"] = []
+
         # Convert set to count for easier use
         stats["spread_count"] = len(stats.get("weapon_inputs", []))
         stats["damage_multiplier"] = max_damage_mult # Update stats with max seen
         
+        # Calculate resulting active synergy from WEAPON contexts
+        if weapon_exit_contexts:
+            # Aggregate all weapon output synergies
+            aggregated_synergies = {}
+            for ctx in weapon_exit_contexts.values():
+                for s, m in ctx.synergies.items():
+                    aggregated_synergies[s] = aggregated_synergies.get(s, 0.0) + m
+            
+            # Store magnitudes for spread logic etc (Using weapon output for this)
+            stats["synergy_magnitudes"] = {
+                (k.value if hasattr(k, "value") else str(k)).lower(): v 
+                for k, v in aggregated_synergies.items()
+            }
+            
+            # Use SynergyManager to determine dominant effect
+            from hex_system.energy_packet import ProjectileContext
+            dummy_context = ProjectileContext(synergies=aggregated_synergies)
+            syn_result = synergy_manager.calculate_synergy(dummy_context)
+            
+            stats["active_synergy_result"] = syn_result
+            # Merge synergy-specific effects (e.g. burn chance, slow)
+            stats["active_synergy_effects"].update(syn_result.effects)
+            
+            # CRITICAL FIX: Calculate weapon damage from total output magnitude
+            # This ensures damage is actually reported and used by Player.shoot
+            stats["weapon_damage"] = sum(aggregated_synergies.values())
+            
+        else:
+             # If no weapon output, check Transfer Output for magnitudes 
+             # (Allows Torso visualization to still work for transfer)
+             if exit_contexts:
+                aggregated_transfer = {}
+                for ctx in exit_contexts.values():
+                   for s, m in ctx.synergies.items():
+                       aggregated_transfer[s] = aggregated_transfer.get(s, 0.0) + m
+                
+                stats["synergy_magnitudes"] = {
+                    (k.value if hasattr(k, "value") else str(k)).lower(): v 
+                    for k, v in aggregated_transfer.items()
+                }
+                
+                # We calculate transfer rate
+                stats["transfer_rate"] = sum(aggregated_transfer.values())
+             else:
+                stats["synergy_magnitudes"] = {}
+             
+             stats["weapon_damage"] = 0.0
+
+        # --- Calculate Synergy Magnitudes from Weapon Inputs ---
+        # REMOVED: This block was overwriting valid synergy magnitudes with empty data
+        # because weapon_inputs contains directions (ints), not contexts.
+        # stats["synergy_magnitudes"] is already correctly populated from weapon output above.
+
+
         # Populate active_synergy string for Player.shoot
         if stats["active_synergy_result"]:
             stats["active_synergy"] = stats["active_synergy_result"].name
+        elif stats.get("synergy_magnitudes"): # Fallback for transfer visualization
+             # Determine dominant transfer synergy
+             best_syn = max(stats["synergy_magnitudes"].items(), key=lambda x: x[1])[0]
+             stats["active_synergy"] = str(best_syn).split('.')[-1].lower()
         else:
             stats["active_synergy"] = None
         
@@ -336,6 +575,9 @@ class ComponentEquipment:
              import logging
              logger = logging.getLogger(__name__)
              logger.debug(f"Simulating {self.slot} with input context. Mag: {input_context.get_total_magnitude()}. Result Weapon Dmg: {stats['weapon_damage']}")
+        
+        # Persist stats for external access (e.g. by Player for secondary abilities)
+        self.stats = stats
              
         return flows, stats, exit_contexts
 
@@ -365,6 +607,9 @@ class ComponentEquipment:
         
         _, sim_stats, _ = self.simulate_flow(input_context=input_context, input_direction=input_dir)
         
+        # R4: Update Accumulation Rate from current potential
+        self.accumulation_rate = sim_stats.get("accumulation_rate", 0.0)
+        
         # Apply Level Bonus (+10% per level)
         level_mult = 1.0 + (self.level * 0.1)
         
@@ -372,7 +617,12 @@ class ComponentEquipment:
             "armor": int(self.base_armor * level_mult), 
             "hp": int(self.base_hp * level_mult), 
             "speed": self.base_speed * level_mult,
-            "damage_multiplier": sim_stats["damage_multiplier"] * level_mult, 
+            "damage_multiplier": sim_stats["damage_multiplier"] * level_mult,
+            
+            # S7: Pass through sink stats
+            "movement_speed_bonus": sim_stats.get("movement_speed_bonus", 0.0),
+            "turn_speed_bonus": sim_stats.get("turn_speed_bonus", 0.0),
+            "stability_bonus": sim_stats.get("stability_bonus", 0.0), 
             "weapon_damage": sim_stats.get("weapon_damage", 0.0) * level_mult,
             "weapon_inputs": list(sim_stats.get("weapon_inputs", set())), # Convert set to list for JSON serialization if needed
             "active_tiles": sim_stats.get("active_tiles", 0),
