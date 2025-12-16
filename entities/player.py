@@ -102,6 +102,9 @@ class Player(Bot):
                 conn = connection_map[slot]
                 context = torso_exits.get(conn["from"])
                 input_dir = conn["to"]
+                
+                if context:
+                     logger.info(f"DEBUG: Torso Output to {slot}: {context.magnitude} (Synergies: {context.synergies})")
             
             _, stats, _ = comp.simulate_flow(context, input_dir)
             
@@ -125,8 +128,11 @@ class Player(Bot):
             effects["rarity"] = comp.quality
             
             # R3: Kinetic Synergy Spread
-            kinetic_rate = stats.get("synergy_magnitudes", {}).get("kinetic", 0.0)
-            spread_factor = max(0.0, 1.0 - (kinetic_rate / 100.0))
+            synergy_mags = stats.get("synergy_magnitudes", {})
+            kinetic_rate = synergy_mags.get("kinetic", 0.0)
+            # Lower threshold to 40.0 to allow complex builds (with splitters/loss) to achieve perfect accuracy
+            spread_factor = max(0.0, 1.0 - (kinetic_rate / 40.0))
+            logger.info(f"DEBUG: Kinetic Rate: {kinetic_rate}, Spread Factor: {spread_factor}")
             
             weapon_inputs = stats.get("weapon_inputs", [])
             spread_count = len(weapon_inputs) if weapon_inputs else 1
@@ -231,13 +237,21 @@ class Player(Bot):
         if available_power <= 0.1:
             return 
 
-        if tile.target_system == TargetSystem.ROCKET_LEGS or tile.target_system == TargetSystem.ACCELERATOR:
-             # Apply continuous force in facing direction
+        if tile.target_system == TargetSystem.ROCKET_LEGS:
+             # Apply continuous force in facing direction OR movement direction
              import math
+             
+             # Determine Dash Direction
+             dash_angle = self.angle # Default to aim
+             current_speed = math.sqrt(self.velocity_x**2 + self.velocity_y**2)
+             
+             if current_speed > 10.0: # If moving significantly
+                 dash_angle = math.atan2(self.velocity_y, self.velocity_x)
+             
              # Power 100 -> Force 2000? Scale factor
              force = available_power * 20.0 * dt
-             fx = math.cos(self.angle) * force
-             fy = math.sin(self.angle) * force
+             fx = math.cos(dash_angle) * force
+             fy = math.sin(dash_angle) * force
              self.velocity_x += fx
              self.velocity_y += fy
              

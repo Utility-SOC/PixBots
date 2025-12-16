@@ -189,6 +189,8 @@ class ComponentEquipment:
                              So input_direction should be the side of the entry hex we enter.
         """
         from hex_system.energy_packet import SynergyType, ProjectileContext
+        import logging
+        logger = logging.getLogger(__name__)
         
         flows = []
         stats = {
@@ -319,18 +321,27 @@ class ComponentEquipment:
             if context.damage_multiplier > max_damage_mult:
                 max_damage_mult = context.damage_multiplier
             
-            # R1: Smart Splitter Logic
+            # R1: Smart Splitter Logic (DISABLED - Reverted to Dumb for predictability)
             valid_exits = None
             if tile.tile_type == "Splitter" and hasattr(tile, "exit_directions"):
-                # Filter exits: Keep if (In Bounds AND Has Tile) OR (Out of Bounds = Transfer)
-                valid_exits = []
-                for d in tile.exit_directions:
-                    neighbor = self._get_neighbor_in_direction(coord, d)
-                    if not self._is_in_bounds(neighbor):
-                        valid_exits.append(d) # Transfer
-                    elif neighbor in self.tile_slots:
-                        valid_exits.append(d) # Valid internal connection
-                    # Else: In bounds but empty -> Skip (Smart)
+                # Revert to simple behavior: Always use all configured exits.
+                # This allows users to "eject" energy into empty tiles if they want.
+                valid_exits = tile.exit_directions
+                
+                # Original Smart Logic (Commented out)
+                # valid_exits = []
+                # for d in tile.exit_directions:
+                #     neighbor = self._get_neighbor_in_direction(coord, d)
+                #     if not self._is_in_bounds(neighbor):
+                #         valid_exits.append(d) # Transfer
+                #     elif neighbor in self.tile_slots:
+                #         valid_exits.append(d) # Valid internal connection
+                
+                # if not valid_exits:
+                #      valid_exits = tile.exit_directions
+                
+                logger.info(f"DEBUG: Splitter at {coord} Exits: {tile.exit_directions} Valid: {valid_exits}")
+
             
             # --- PRE-EMPTIVE WEAPON CAPTURE ---
             # Detect weapon immediately to bypass potential flow processing glitches

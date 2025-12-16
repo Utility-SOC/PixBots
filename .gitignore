@@ -55,6 +55,11 @@ test_*.py
 fix_*.py
 reproduce_*.py
 simple_verify.py
+check_*.py
+read_log.py
+context_*.txt
+debug_*.txt
+phase*_debug.txt
 generate_enemy_sprites.py
 pixelbots_main.py
 piticket.sh

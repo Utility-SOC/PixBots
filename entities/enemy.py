@@ -21,6 +21,8 @@ class Enemy(Bot):
             sprite, metadata = self._generator.generate_sniper(seed)
         elif ai_class == "ambusher":
             sprite, metadata = self._generator.generate_ambusher(biome, seed)
+        elif ai_class == "scout":
+            sprite, metadata = self._generator.generate_scout(seed)
         elif ai_class == "Boss":
             sprite, metadata = self._generator.generate_boss(seed)
         else: # Grunt
@@ -60,6 +62,13 @@ class Enemy(Bot):
             self.weapons.append({"damage": 25 + level * 3, "speed": 250, "cooldown": 1.0, "last_shot": 0, "synergy": None})
             self.max_speed = 120 # Slow but imposing
             self.hp *= 5 # Massive HP pool
+        elif ai_class == "scout":
+            self.detection_range = 600
+            self.attack_range = 400
+            self.max_speed = 280 # Very fast
+            self.hp *= 0.6 # Low health
+            # Scouts don't shoot much, mainly alert
+            self.weapons.append({"damage": 3 + level, "speed": 350, "cooldown": 2.0, "last_shot": 0, "synergy": None})
         else: # Grunt
             self.detection_range = 400
             self.attack_range = 200
@@ -87,17 +96,49 @@ class Enemy(Bot):
             synergies = ["fire", "ice", "vortex", "explosion", "kinetic", "vampiric"]
             self.synergy = random.choice(synergies)
             # Boss always has a synergy
-            if self.ai_class == "Boss":
+        if self.ai_class == "Boss":
                 self.synergy = random.choice(["vortex", "explosion", "fire"]) # Bosses get the cool ones
+        
+        # Squad Affiliation
+        self.squad_id = None
+        
+        # Visual State
+        self.alpha = 255
+        self.cloak_active = False # For Enemy Cloak
+        self.cloak_timer = 0
+        self.cloak_cooldown = 0
 
     def update(self, dt, player, combat_system, current_time, game_map=None):
         super().update(dt)
-        self.target = player
         
-        dist = math.sqrt((self.target.x - self.x)**2 + (self.target.y - self.y)**2)
+        # --- Handle Cloak / Aggro Drop ---
+        is_cloaked = getattr(player, "is_cloaked", False)
+        
+        # Initialize last_known_pos if needed
+        if not hasattr(self, "last_known_pos"):
+            self.last_known_pos = (player.x, player.y)
+            
+        if not is_cloaked:
+            # Player is visible, update knowledge
+            self.last_known_pos = (player.x, player.y)
+            self.target_pos = (player.x, player.y)
+        else:
+            # Player is cloaked, chase last known position
+            self.target_pos = self.last_known_pos
+            
+        # Distance to PERCEIVED target
+        dist = math.sqrt((self.target_pos[0] - self.x)**2 + (self.target_pos[1] - self.y)**2)
+        
+        # Aggro Drop Check: If at last known pos and still cloaked -> Lost them.
+        if is_cloaked and dist < 50: # Close enough to investigate
+            if self.state != "idle":
+                logging.getLogger(__name__).info(f"{self.name} lost the target (Cloak)!")
+                self.state = "idle"
+                self.move_timer = 2.0 # Pause to look around
         
         if self.state == "idle":
-            if dist < self.detection_range:
+            # Only wake up if player is VISIBLE (or very close/noisy? No, strict cloak for now)
+            if not is_cloaked and dist < self.detection_range:
                 self.state = "chase"
             else:
                 # Random movement
@@ -113,23 +154,25 @@ class Enemy(Bot):
                 if dist < self.attack_range * 0.5:
                     self.state = "flee"
                 elif dist < self.attack_range:
+                    # If cloaked, we might still shoot at last known pos? 
+                    # Let's say yes, but with inaccuracy (handled in shoot)
                     self.state = "attack"
-                elif dist > self.detection_range * 1.5:
-                    self.state = "idle"
+                elif dist > self.detection_range * 1.5 and not is_cloaked:
+                    self.state = "idle" 
                 else:
                     # Move to range
-                    dx = self.target.x - self.x
-                    dy = self.target.y - self.y
+                    dx = self.target_pos[0] - self.x
+                    dy = self.target_pos[1] - self.y
                     self.update_movement(dx, dy, dt, game_map)
             else: # Grunt / Ambusher
                 if dist < self.attack_range:
                     self.state = "attack"
-                elif dist > self.detection_range * 1.5:
+                elif dist > self.detection_range * 1.5 and not is_cloaked:
                     self.state = "idle"
                 else:
-                    # Move towards player
-                    dx = self.target.x - self.x
-                    dy = self.target.y - self.y
+                    # Move towards target
+                    dx = self.target_pos[0] - self.x
+                    dy = self.target_pos[1] - self.y
                     self.update_movement(dx, dy, dt, game_map)
 
         elif self.state == "flee":
@@ -137,8 +180,8 @@ class Enemy(Bot):
                  self.state = "attack"
              else:
                  # Run away!
-                 dx = self.x - self.target.x
-                 dy = self.y - self.target.y
+                 dx = self.x - self.target_pos[0]
+                 dy = self.y - self.target_pos[1]
                  self.update_movement(dx, dy, dt, game_map)
                 
         elif self.state == "attack":
@@ -150,8 +193,8 @@ class Enemy(Bot):
                 # Stop and shoot (or keep moving if ambusher?)
                 if self.ai_class == "ambusher":
                      # Circle strafe? For now just chase/attack
-                     dx = self.target.x - self.x
-                     dy = self.target.y - self.y
+                     dx = self.target_pos[0] - self.x
+                     dy = self.target_pos[1] - self.y
                      self.update_movement(dx, dy, dt, game_map)
                 else:
                     self.update_movement(0, 0, dt, game_map)
@@ -159,11 +202,58 @@ class Enemy(Bot):
                 # Try tactics
                 self.try_tactics(dt)
                 
-                self.shoot(self.target.x, self.target.y, combat_system, current_time)
+                # Shoot at perceived position
+                self.shoot(self.target_pos[0], self.target_pos[1], combat_system, current_time)
 
     def try_tactics(self, dt):
         if self.shield_cooldown > 0: self.shield_cooldown -= dt
         if self.buff_cooldown > 0: self.buff_cooldown -= dt
+        
+        # --- Ambusher Cloak Logic ---
+        if self.ai_class == "ambusher":
+            if self.cloak_cooldown > 0: self.cloak_cooldown -= dt
+            
+            # Activate Cloak
+            if not self.cloak_active and self.cloak_cooldown <= 0 and self.state in ["idle", "chase"]:
+                self.cloak_active = True
+                self.cloak_timer = 4.0 # Stay cloaked for 4s
+                logging.getLogger(__name__).debug(f"{self.name} activated Cloak")
+            
+            # Handle Cloak State
+            if self.cloak_active:
+                self.cloak_timer -= dt
+                # Fade out
+                if self.alpha > 20:
+                    self.alpha = max(20, self.alpha - 500 * dt)
+                
+                # Break Cloak conditions
+                should_decloak = False
+                if self.cloak_timer <= 0: should_decloak = True
+                if self.state == "attack": should_decloak = True
+                
+                if should_decloak:
+                    self.cloak_active = False
+                    self.cloak_cooldown = 5.0 # Cooldown
+                    logging.getLogger(__name__).debug(f"{self.name} decloaking")
+            else:
+                # Fade In
+                if self.alpha < 255:
+                    self.alpha = min(255, self.alpha + 500 * dt)
+                    
+        elif self.ai_class == "scout":
+            # Scouts constantly try to alert if they have LOS
+            # This is handled by behavior_executor if we use JSON behaviors,
+            # but as a fallback/hardcoded behavior:
+            if self.state == "chase" or self.state == "attack":
+                # Assuming access to behavior executor here is tricky without passing it in.
+                # BUT, Enemy.update() doesn't call try_tactics with behavior executor.
+                # However, try_tactics is called inside update.
+                # We'll rely on the behavior system normally, but since we're hardcoding here:
+                pass 
+                # Actually, the user asked for behavior executor implementation.
+                # So we just need to ensure the enemy USES the behavior "scout_alert".
+                # We'll add it to their 'tactics' list?
+                pass
         
         if "shield" in self.tactics and not self.shield_active and self.shield_cooldown <= 0:
             if self.hp < self.max_hp * 0.5:
@@ -183,7 +273,13 @@ class Enemy(Bot):
         import constants
         if self.ai_class == "Boss" and getattr(constants, "BOSS_INVULNERABLE", False):
             return # No damage
-            
+        
+        # Break cloak on damage
+        if self.cloak_active:
+            self.cloak_active = False
+            self.cloak_cooldown = 5.0
+            self.alpha = 255 # Instant reveal or let update handle it? Let's force visible to be fair
+        
         if self.shield_active:
             amount *= 0.5 # 50% reduction
         super().take_damage(amount)

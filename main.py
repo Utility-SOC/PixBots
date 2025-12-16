@@ -1,8 +1,8 @@
-# G:\work\pixelbots\main.py
 import pygame
 import os
 import sys
 import logging
+import math
 
 # --- Setup Logging ---
 # It's best practice to configure logging as the very first thing.
@@ -23,6 +23,7 @@ from systems.combat_system import CombatSystem
 from systems.ai_behavior_system import BehaviorSystem
 from systems.behavior_executor import BehaviorExecutor
 from systems.saveload import SaveLoadSystem
+from systems.squad_system import SquadManager
 
 # --- World Imports ---
 from world.game_map import GameMap
@@ -76,6 +77,9 @@ class Game:
         self.behavior_system = BehaviorSystem()
         self.behavior_executor = BehaviorExecutor(self)
         
+        # Squad System
+        self.squad_manager = SquadManager(self)
+        
         # Combat system needs behavior system for damage tracking
         self.combat_system = CombatSystem(self.asset_manager, self.behavior_system)
 
@@ -113,19 +117,14 @@ class Game:
         while self.is_running:
             dt = self.clock.tick(constants.FPS) / 1000.0
             if frame_count < 10:
-                logger.info(f"Frame {frame_count} start")
+                pass # logger.info(f"Frame {frame_count} start")
             
             self.handle_events()
-            if frame_count < 10: logger.info(f"Frame {frame_count} events handled")
+            if frame_count < 10: pass # logger.info(f"Frame {frame_count} events handled")
+            
             
             self.update(dt)
-            if frame_count < 10: logger.info(f"Frame {frame_count} update done")
-            
             self.render()
-            if frame_count < 10: logger.info(f"Frame {frame_count} render done")
-            
-            frame_count += 1
-        self.cleanup()
 
     def handle_events(self):
         """Process all inputs and events."""
@@ -270,14 +269,38 @@ class Game:
                     if result:
                         loaded_player, map_seed = result
                         self.player = loaded_player
+                        # Force Asset Manager (Fix for Invisible Player)
+                        self.player.asset_manager = self.asset_manager
+                        self.player.sprite = None # Force reload
+                        logger.info(f"Game Loaded. Forced AssetManager on Player. Sprite Name: {self.player.sprite_name}")
+
                         # Re-link player to game map if needed (not strictly needed as player has x,y)
                         # But we need to ensure all_bots has the new player
-                        self.all_bots[0] = self.player
+                        self.all_bots = [self.player] # Reset bots list with loaded player
                         
                         # Link player to UI
                         self.component_viewer.player = self.player
                         
                         print("Game Loaded!")
+
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F10:
+                    # PANIC DEBUG: Inspect Player State
+                    logger.info("--- PANIC DEBUG ---")
+                    logger.info(f"Player Exists: {self.player is not None}")
+                    if self.player:
+                        logger.info(f"Player Pos: ({self.player.x}, {self.player.y})")
+                        logger.info(f"Player Sprite: {self.player.sprite}")
+                        if self.player.sprite:
+                            logger.info(f"Sprite Size: {self.player.sprite.get_width()}x{self.player.sprite.get_height()}")
+                            logger.info(f"Sprite Alpha: {self.player.sprite.get_alpha()}")
+                        logger.info(f"Player Alpha: {self.player.alpha}")
+                        logger.info(f"Player AssetManager: {self.player.asset_manager is not None}")
+                        logger.info(f"Player Sprite Name: {self.player.sprite_name}")
+                    
+                    in_bots = self.player in self.all_bots
+                    logger.info(f"Player in all_bots: {in_bots}")
+                    logger.info(f"Camera: ({self.camera_x}, {self.camera_y})")
+                    logger.info("-------------------")
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_F5:
                     # Save Game
                     if self.save_load_system.save_game(self.current_profile, self.player):
@@ -323,20 +346,25 @@ class Game:
                     # Debug: Spawn Cohort
                     logger.info("Debug: Spawning Enemy Cohort (F6)")
                     import random
-                    # from entities.enemy import Enemy
                     
-                    # Spawn 5-8 enemies around the player
+                    # 1. Always spawn a Boss
+                    bx = self.player.x + random.choice([-300, 300]) # Offset X
+                    by = self.player.y + random.choice([-300, 300]) # Offset Y
+                    boss_lvl = 20
+                    boss = Enemy("Boss", bx, by, level=boss_lvl, ai_class="Boss")
+                    boss.asset_manager = self.asset_manager
+                    self.all_bots.append(boss)
+                    logger.info(f"Spawned Boss at {bx}, {by}")
+
+                    # 2. Spawn 5-8 mixed enemies
                     count = random.randint(5, 8)
-                    for _ in range(count):
+                    for i in range(count):
                         # Random position near player
-                        offset_x = random.randint(-400, 400)
-                        offset_y = random.randint(-400, 400)
-                        # Ensure not too close
-                        if abs(offset_x) < 100: offset_x += 100 if offset_x > 0 else -100
-                        if abs(offset_y) < 100: offset_y += 100 if offset_y > 0 else -100
+                        angle = random.uniform(0, 6.28)
+                        dist = random.uniform(200, 500)
                         
-                        x = self.player.x + offset_x
-                        y = self.player.y + offset_y
+                        x = self.player.x + math.cos(angle) * dist
+                        y = self.player.y + math.sin(angle) * dist
                         
                         # Random level based on player level
                         lvl = max(1, self.player.level + random.randint(-1, 2))
@@ -345,7 +373,13 @@ class Game:
                         if self.game_map and hasattr(self.game_map, "biome_manager"):
                             biome = self.game_map.biome_manager.current_biome
                             
-                        enemy = Enemy("Enemy", x, y, level=lvl, biome=biome)
+                        # Pick Class
+                        r = random.random()
+                        if r < 0.6: ai_class = "Grunt"
+                        elif r < 0.8: ai_class = "Sniper"
+                        else: ai_class = "Ambusher"
+                            
+                        enemy = Enemy(f"{ai_class} {i}", x, y, level=lvl, ai_class=ai_class.lower(), biome=biome)
                         enemy.asset_manager = self.asset_manager
                         self.all_bots.append(enemy)
                         
@@ -378,9 +412,16 @@ class Game:
                     splitter.set_exit_direction(1, 1) # NE -> (1,1)
                     comp.place_tile(HexCoord(0,2), splitter)
                     
-                    self.player.equip_component(comp)
                     self.player.recalculate_stats()
                     logger.info("Equipped Multi-Vector Test Arm (5x5).")
+                
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_F4:
+                     # Squad Debug
+                     logger.info("DEBUG: Spawning Phalanx Squad")
+                     if self.player:
+                         target_x = self.player.x + 300
+                         target_y = self.player.y
+                         self.squad_manager.create_squad("phalanx", target_x, target_y)
 
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_F1:
                     # Open Help Screen
@@ -467,6 +508,10 @@ class Game:
                         elif event.key == pygame.K_4: syn = "raw"
                         elif event.key == pygame.K_5: syn = "vortex"
                         elif event.key == pygame.K_6: syn = "explosion"
+                        elif event.key == pygame.K_7: syn = "kinetic"
+                        elif event.key == pygame.K_8: syn = "poison"
+                        elif event.key == pygame.K_9: syn = "pierce"
+                        elif event.key == pygame.K_0: syn = "vampiric"
                         elif event.key == pygame.K_ESCAPE:
                             self.state_manager.set_state(constants.STATE_PLAY)
                             
@@ -497,7 +542,9 @@ class Game:
                             syn_map = {
                                 "fire": SynergyType.FIRE, "ice": SynergyType.ICE, 
                                 "lightning": SynergyType.LIGHTNING, "raw": SynergyType.RAW,
-                                "vortex": SynergyType.VORTEX, "explosion": SynergyType.EXPLOSION
+                                "vortex": SynergyType.VORTEX, "explosion": SynergyType.EXPLOSION,
+                                "kinetic": SynergyType.KINETIC, "poison": SynergyType.POISON,
+                                "pierce": SynergyType.PIERCE, "vampiric": SynergyType.VAMPIRIC
                             }
                             core_type = syn_map.get(self.debug_core_config["synergy"], SynergyType.RAW)
                             
@@ -529,6 +576,7 @@ class Game:
                         elif event.key == pygame.K_2: enemy_class = "Sniper"
                         elif event.key == pygame.K_3: enemy_class = "Ambusher"
                         elif event.key == pygame.K_4: enemy_class = "Boss"
+                        elif event.key == pygame.K_5: enemy_class = "Scout"
                         elif event.key == pygame.K_ESCAPE:
                             self.state_manager.set_state(constants.STATE_PLAY)
                         
@@ -674,6 +722,11 @@ class Game:
         """Update game logic."""
         current_state = self.state_manager.get_state()
         if current_state == constants.STATE_PLAY and self.player:
+            # Safety Check: Ensure player is in all_bots (Fix for Invisible Player)
+            if self.player not in self.all_bots:
+                self.all_bots.append(self.player)
+                logger.warning("Player was missing from all_bots! Re-added.")
+
             self.update_player_movement(dt)
             self.player.update(dt)
             
@@ -812,7 +865,7 @@ class Game:
             if self.debug_spawn_step == "type":
                 options = ["1. Spawn Item", "2. Spawn Enemy", "3. Spawn Core"]
             elif self.debug_spawn_step == "enemy_class":
-                options = ["1. Grunt", "2. Sniper", "3. Ambusher", "4. Boss"]
+                options = ["1. Grunt", "2. Sniper", "3. Ambusher", "4. Boss", "5. Scout"]
             elif self.debug_spawn_step == "rarity":
                 options = ["1. Common", "2. Uncommon", "3. Rare", "4. Epic", "5. Legendary"]
             elif self.debug_spawn_step == "slot":
@@ -820,7 +873,10 @@ class Game:
             elif self.debug_spawn_step == "core_rate":
                 options = ["1. 10/s", "2. 50/s", "3. 100/s", "4. 500/s", "5. 1000/s"]
             elif self.debug_spawn_step == "core_synergy":
-                options = ["1. Fire", "2. Ice", "3. Lightning", "4. Raw", "5. Vortex"]
+                options = [
+                    "1. Fire", "2. Ice", "3. Lightning", "4. Raw", "5. Vortex", 
+                    "6. Explosion", "7. Kinetic", "8. Poison", "9. Pierce", "0. Vampiric"
+                ]
             elif self.debug_spawn_step == "core_direction":
                 options = ["1. Omni", "2. Top (0)", "3. Top-Right (1)", "4. Bot-Right (2)", "5. Bot (3)", "6. Bot-Left (4)", "7. Top-Left (5)"]
             else:
@@ -924,6 +980,32 @@ class Game:
         music.shutdown()
         pygame.quit()
         sys.exit()
+
+    def spawn_enemy(self, enemy_class, x, y, level=None):
+        """Spawns an enemy at the given location."""
+        if level is None:
+            import random
+            level = random.randint(1, 10)
+        
+        biome = "forest"
+        if self.game_map and hasattr(self.game_map, "biome_manager"):
+            biome = self.game_map.biome_manager.current_biome
+            
+        # Map lowercase class names if needed
+        class_map = {
+            "grunt": "Grunt",
+            "sniper": "Sniper", 
+            "ambusher": "Ambusher",
+            "boss": "Boss",
+            "scout": "Scout"
+        }
+        proper_class = class_map.get(enemy_class.lower(), "Grunt")
+        
+        enemy = Enemy(f"{proper_class} Lvl {level}", x, y, level=level, ai_class=proper_class, biome=biome)
+        enemy.asset_manager = self.asset_manager
+        self.all_bots.append(enemy)
+        logger.info(f"Spawned enemy {enemy.name} at {x:.1f}, {y:.1f}")
+        return enemy
 
 if __name__ == '__main__':
     try:

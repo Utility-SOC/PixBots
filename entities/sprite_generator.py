@@ -105,7 +105,24 @@ class ProceduralBotGenerator:
             p2 = (p1[0] + rng.randint(-4, 4), p1[1] + rng.randint(-4, 4))
             pygame.draw.line(surf, (30, 40, 20), p1, p2, 1)
             
-        return surf
+        return surf, None
+
+    def generate_scout(self, seed=None):
+        rng = random.Random(seed) if seed is not None else random.Random()
+        surf = pygame.Surface((32, 32), pygame.SRCALPHA)
+        
+        # Diamond shape (Fast/Aerodynamic)
+        color = (255, 255, 100) # Yellow/Bright
+        
+        # Main body
+        points = [(16, 4), (28, 16), (16, 28), (4, 16)]
+        pygame.draw.polygon(surf, color, points)
+        pygame.draw.polygon(surf, (200, 200, 50), points, 2)
+        
+        # Engine trails?
+        pygame.draw.line(surf, (100, 200, 255), (16, 28), (16, 32), 2)
+        
+        return surf, None
 
     def generate_ambusher(self, biome="forest", seed=None):
         rng = random.Random(seed) if seed is not None else random.Random()
@@ -141,7 +158,7 @@ class ProceduralBotGenerator:
         # Hidden Eye
         pygame.draw.circle(surf, (255, 255, 0), (16, 16), 3)
         
-        return surf
+        return surf, None
 
     def _generate_mech_boss(self, rng):
         surf = pygame.Surface((192, 192), pygame.SRCALPHA)

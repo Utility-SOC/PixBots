@@ -62,6 +62,11 @@ class Projectile:
         base_radius = 6 if "vortex" in active_synergies else 4
         if "explosion" in active_synergies: base_radius = 5
         
+        # Ensure minimum visibility (Fix for invisible projectiles)
+        # Use damage to scale, but clamp to min 4 and max 15 to avoid huge particles
+        damage_radius = max(4, min(15, int(self.damage / 10)))
+        base_radius = max(base_radius, damage_radius)
+        
         num_synergies = len(active_synergies)
         step = base_radius / num_synergies
         

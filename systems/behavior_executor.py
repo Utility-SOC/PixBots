@@ -43,6 +43,7 @@ class BehaviorExecutor:
             "stealth": self._execute_stealth,
             "deploy_smoke": self._execute_deploy_smoke,
             "teleport_attack": self._execute_teleport_attack,
+            "scout_alert": self._execute_scout_alert,
             
             # Tactical behaviors
             "group_up": self._execute_group_up,
@@ -328,6 +329,53 @@ class BehaviorExecutor:
             current_time
         )
     
+    def _execute_scout_alert(self, enemy, params, player, current_time):
+        """Scout alerts nearby enemies."""
+        # Check LOS to player
+        tx, ty = self._get_target_pos(enemy, player)
+        dx = tx - enemy.x
+        dy = ty - enemy.y
+        dist = math.sqrt(dx**2 + dy**2)
+        
+        detection_range = params.get("detection_range", 600)
+        if dist < detection_range:
+            # ALERT!
+            # 1/3 map size radius. Map is 100xTILE_SIZE. TILE_SIZE=64 usually? 
+            # Assuming map width approx 6400. 1/3 is ~2100.
+            alert_radius = params.get("alert_radius", 2000)
+            
+            # Check cooldown
+            if hasattr(enemy, 'last_alert_time') and current_time - enemy.last_alert_time < 10.0:
+                return True # On cooldown, but "executing"
+                
+            enemy.last_alert_time = current_time
+            logger.info(f"{enemy.name} ALERTED enemies within {alert_radius}px!")
+            
+            # Find enemies in range
+            count = 0
+            if hasattr(self.game_state, 'all_bots'):
+                for bot in self.game_state.all_bots:
+                    if bot != enemy and bot != player and not getattr(bot, 'is_player', False):
+                        bdx = bot.x - enemy.x
+                        bdy = bot.y - enemy.y
+                        if math.sqrt(bdx**2 + bdy**2) < alert_radius:
+                            # Wake them up!
+                            bot.target_pos = (player.x, player.y)
+                            if hasattr(bot, 'state'):
+                                bot.state = "chase"
+                            # Reset idle timer so they move immediately
+                            bot.move_timer = 0
+                            count += 1
+                            
+            # Visual feedback? Maybe a sound or effect later
+            if count > 0:
+                logging.getLogger(__name__).info(f"  -> {count} enemies responded to alert.")
+                
+            # Flee after alerting
+            return self._execute_kite_away(enemy, {"min_range": 500, "retreat_speed": 1.5}, player, current_time)
+            
+        return False
+    
     # ===== UTILITY BEHAVIORS =====
     
     def _execute_stealth(self, enemy, params, player, current_time):
@@ -384,9 +432,25 @@ class BehaviorExecutor:
     
     def _execute_group_up(self, enemy, params, player, current_time):
         """Swarm formation."""
-        # This would require access to other enemies - simplified
-        logger.info(f"{enemy.name} attempting to group up")
-        return True
+        if not enemy.squad_id or not hasattr(self.game_state, 'squad_manager'):
+            return False
+            
+        squad = self.game_state.squad_manager.squads.get(enemy.squad_id)
+        if not squad:
+            return False
+            
+        target_pos = squad.get_formation_pos(enemy)
+        if target_pos:
+            tx, ty = target_pos
+            dx = tx - enemy.x
+            dy = ty - enemy.y
+            dist = math.sqrt(dx**2 + dy**2)
+            
+            if dist > 10:
+                enemy.update_movement(dx, dy, 0.016)
+                return True
+        
+        return False
     
     def _execute_defensive_stance(self, enemy, params, player, current_time):
         """Shield phase."""

@@ -1,0 +1,32 @@
+{
+  "squads": {
+    "phalanx": {
+      "name": "Iron Phalanx",
+      "description": "A defensive wall of grunts protecting a leader.",
+      "composition": {
+        "Grunt": 3,
+        "Sniper": 1
+      },
+      "playbook": "phalanx_shield",
+      "formation": "wedge"
+    },
+    "ambush_party": {
+      "name": "Forest Ghosts",
+      "description": "Stealth units that surround and strike.",
+      "composition": {
+        "Ambusher": 3
+      },
+      "playbook": "encircle",
+      "formation": "circle"
+    },
+    "scout_pair": {
+      "name": "Recon Duo",
+      "description": "Fast movers that mark targets.",
+      "composition": {
+        "Scout": 2
+      },
+      "playbook": "hit_and_run",
+      "formation": "line"
+    }
+  }
+}

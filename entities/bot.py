@@ -239,9 +239,29 @@ class Bot:
         
         # Debug: Check for missing sprite
         if self.sprite is None and self.name == "Player" and (pygame.time.get_ticks() % 1000) < 20:
-             import logging
-             logger = logging.getLogger(__name__)
-             logger.warning(f"Player Sprite is MISSING! AssetManager: {self.asset_manager is not None}")
+             logger.warning(f"Player Sprite is MISSING! AssetManager: {self.asset_manager is not None}, SpriteName: {self.sprite_name}")
+             if self.asset_manager:
+                 logger.warning(f"Attempting to load: {self.sprite_name}")
+
+        if self.sprite:
+            sx = int(self.x + offset_x - self.sprite.get_width() / 2)
+            sy = int(self.y + offset_y - self.sprite.get_height() / 2)
+            
+            # Debug render pos
+            if self.name == "Player" and (pygame.time.get_ticks() % 2000) < 20:
+                 logger.debug(f"Rendering Player at Screen: ({sx}, {sy}), World: ({self.x}, {self.y})")
+
+        else:
+            # Fallback Rendering (Fix for Invisible Player)
+            # If sprite is missing, draw a colored circle/rect so the player is visible
+            sx = int(self.x + offset_x)
+            sy = int(self.y + offset_y)
+            color = (0, 255, 0) if self.name == "Player" else (255, 0, 0)
+            pygame.draw.circle(screen, color, (sx, sy), 16)
+            
+            # Try to reload once per second
+            if self.asset_manager and (pygame.time.get_ticks() % 1000) < 20:
+                self.sprite = self.asset_manager.get_image(self.sprite_name)
 
         if self.sprite:
             sx = int(self.x + offset_x - self.sprite.get_width() / 2)
@@ -251,8 +271,6 @@ class Bot:
             current_alpha = getattr(self, 'alpha', 255)
             # Log once every ~1 second (1000ms)
             if self.name == "Player" and (pygame.time.get_ticks() % 1000) < 20: 
-                 import logging
-                 logger = logging.getLogger(__name__)
                  logger.debug(f"Rendering Player: Alpha={current_alpha}, Pos=({self.x:.1f},{self.y:.1f})")
 
             if current_alpha < 255:
