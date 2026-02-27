@@ -109,7 +109,7 @@ class BiomeManager:
         elif terrain_noise > mountain_threshold: return MOUNTAIN
         
         return {"desert": DESERT, "forest": FOREST, "tundra": TUNDRA, 
-                "volcano": VOLCANO}.get(biome_type, GRASS)
+                "volcano": VOLCANO, "constructed": GRASS}.get(biome_type, GRASS)
 
     def get_biome_color(self, x, y, terrain_type=None):
         """Get the color for a specific position based on terrain and biome."""
@@ -205,5 +205,11 @@ class BiomeManager:
                 "water_color": [100, 150, 255], "mountain_color": [150, 150, 150],
                 "obstacle_chance": 0.05, "water_threshold": 0.25, "mountain_threshold": 0.85, # Open space
                 "obstacle_types": ["Tree", "Boulder"]
+            },
+            "constructed": {
+                "name": "Constructed", "base_color": [110, 110, 115], # Concrete grey
+                "water_color": [50, 80, 90], "mountain_color": [80, 80, 85], # Stiff barriers
+                "obstacle_chance": 0.15, "water_threshold": 0.1, "mountain_threshold": 0.8,
+                "obstacle_types": ["Bunker", "Barricade", "GuardTower"]
             }
         }

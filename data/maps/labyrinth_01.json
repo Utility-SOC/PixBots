@@ -1,0 +1,33 @@
+{
+    "id": "labyrinth_01",
+    "name": "The Deep Maze",
+    "type": "labyrinth",
+    "description": "Navigate the maze to find the relic and escape.",
+    "lore": "Memory Log: We built these tunnels to hide from the radiation. Now they're tombs. High risk, high reward.",
+    "size": {
+        "width": 80,
+        "height": 80
+    },
+    "generation_params": {
+        "biome": "mountainous",
+        "terrain_density": 0.8,
+        "obstacle_density": 0.6,
+        "base_enemy_level": 10
+    },
+    "camera": {
+        "zoom_level": 1.5
+    },
+    "objectives": [
+        {
+            "type": "retrieve_relic",
+            "count": 1
+        }
+    ],
+    "enemies": {
+        "density": 0.04,
+        "composition": {
+            "ambusher": 0.7,
+            "scout": 0.3
+        }
+    }
+}

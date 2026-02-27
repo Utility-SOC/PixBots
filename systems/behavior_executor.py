@@ -291,6 +291,12 @@ class BehaviorExecutor:
         damage = params.get("damage", 20)
         knockback = params.get("knockback", 100)
         
+        cooldown = params.get("cooldown", 3.0)
+        
+        if hasattr(enemy, 'last_area_time'):
+            if current_time - enemy.last_area_time < cooldown:
+                return False
+                
         # Check if player in range
         dx = player.x - enemy.x
         dy = player.y - enemy.y
@@ -304,6 +310,8 @@ class BehaviorExecutor:
             direction = math.atan2(dy, dx)
             player.x += math.cos(direction) * knockback
             player.y += math.sin(direction) * knockback
+            
+            enemy.last_area_time = current_time
         
         return True
     
@@ -416,6 +424,13 @@ class BehaviorExecutor:
         """Boss teleport strike."""
         teleport_range = params.get("teleport_range", 300)
         damage = params.get("damage", 30)
+        cooldown = params.get("cooldown", 5.0)
+        
+        # Check cooldown before teleporting 
+        # (Otherwise boss teleports every frame while melee is on cooldown)
+        if hasattr(enemy, 'last_teleport_time'):
+            if current_time - enemy.last_teleport_time < cooldown:
+                return False
         
         # Teleport behind player
         angle = random.uniform(0, math.pi * 2)
@@ -429,6 +444,9 @@ class BehaviorExecutor:
             player,
             current_time
         )
+        if success:
+            enemy.last_teleport_time = current_time
+        return success
     
     def _execute_group_up(self, enemy, params, player, current_time):
         """Swarm formation."""

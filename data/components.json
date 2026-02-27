@@ -1,0 +1,119 @@
+{
+    "starter": {
+        "torso": {
+            "name": "Basic Torso Mk I",
+            "slot": "torso",
+            "quality": "Common",
+            "base_armor": 5,
+            "base_hp": 50,
+            "valid_coords": [[0,0], [1,0], [2,0], [0,1], [1,1], [2,1], [0,2], [1,2], [2,2]],
+            "core": {"type": "fire", "rate": 100.0, "pos": [1, 1]},
+            "tiles": [
+                {"pos": [1, 1], "type": "Reactor", "category": "CORE"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "head": {
+            "name": "Sensor Array Mk I",
+            "slot": "head",
+            "quality": "Common",
+            "base_armor": 2,
+            "base_hp": 20,
+            "valid_coords": [[0,0], [1,0], [2,0], [0,1], [1,1], [2,1]],
+            "tiles": [
+                {"pos": [1, 1], "type": "Resonator", "category": "MODIFIER"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "back": {
+            "name": "Power Distributor Mk I",
+            "slot": "back",
+            "quality": "Common",
+            "base_armor": 3,
+            "base_hp": 30,
+            "valid_coords": [[0,0], [1,0], [2,0], [0,1], [1,1], [2,1], [0,2], [1,2], [2,2]],
+            "tiles": [
+                {"pos": [1, 1], "type": "Splitter", "category": "ROUTER"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "left_arm": {
+            "name": "Left Blaster Mk I",
+            "slot": "left_arm",
+            "quality": "Common",
+            "base_armor": 4,
+            "base_hp": 40,
+            "valid_coords": [[0,0], [1,0], [2,0], [3,0], [0,1], [1,1], [2,1], [3,1]],
+            "tiles": [
+                {"pos": [3, 0], "type": "Weapon Mount", "category": "OUTPUT", "weapon_type": "beam"},
+                {"pos": [0, 0], "type": "Amplifier", "category": "MODIFIER"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "right_arm": {
+            "name": "Right Blaster Mk I",
+            "slot": "right_arm",
+            "quality": "Common",
+            "base_armor": 4,
+            "base_hp": 40,
+            "valid_coords": [[0,0], [1,0], [2,0], [3,0], [0,1], [1,1], [2,1], [3,1]],
+            "tiles": [
+                {"pos": [3, 1], "type": "Weapon Mount", "category": "OUTPUT", "weapon_type": "kinetic"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "left_leg": {
+            "name": "Left Tread Mk I",
+            "slot": "left_leg",
+            "quality": "Common",
+            "base_armor": 6,
+            "base_hp": 60,
+            "valid_coords": [[0,0], [1,0], [0,1], [1,1], [0,2], [1,2], [0,3], [1,3]],
+            "tiles": [
+                {"pos": [0, 2], "type": "Amplifier", "category": "MODIFIER"}
+            ],
+            "fill_tile": "Conductor"
+        },
+        "right_leg": {
+            "name": "Right Tread Mk I",
+            "slot": "right_leg",
+            "quality": "Common",
+            "base_armor": 6,
+            "base_hp": 60,
+            "valid_coords": [[0,0], [1,0], [0,1], [1,1], [0,2], [1,2], [0,3], [1,3]],
+            "tiles": [
+                {"pos": [1, 2], "type": "Amplifier", "category": "MODIFIER"}
+            ],
+            "fill_tile": "Conductor"
+        }
+    },
+    "shapes": {
+        "torso": {
+            "Common": [{"w": 3, "h": 3, "remove": []}],
+            "Uncommon": [{"w": 3, "h": 3, "remove": []}],
+            "Rare": [{"w": 4, "h": 4, "remove": []}],
+            "Legendary": [{"w": 5, "h": 5, "remove": [[0,0], [4,0], [0,4], [4,4]]}]
+        },
+        "head": {
+            "Common": [{"w": 3, "h": 2, "remove": []}],
+            "Uncommon": [{"w": 2, "h": 3, "remove": []}],
+            "Legendary": [{"coords": [[1,0], [0,1], [1,1], [2,1], [1,2], [0,2], [2,0]]}]
+        },
+        "arm": {
+            "Common": [{"w": 4, "h": 2, "remove": []}],
+            "Uncommon": [{"w": 4, "h": 2, "remove": []}],
+            "Rare": [{"w": 5, "h": 2, "remove": [[0,0], [4,1]]}],
+            "Legendary": [{"w": 5, "h": 3, "remove": [[0,0], [4,2]]}]
+        },
+        "leg": {
+            "Common": [{"w": 2, "h": 4, "remove": []}],
+            "Uncommon": [{"w": 2, "h": 4, "remove": []}],
+            "Rare": [{"w": 2, "h": 5, "remove": []}],
+            "Legendary": [{"w": 3, "h": 4, "remove": []}]
+        },
+        "back": {
+            "Common": [{"w": 3, "h": 3, "remove": []}],
+            "Legendary": [{"w": 3, "h": 3, "add": [[1,-1], [1,3]]}]
+        }
+    }
+}

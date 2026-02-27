@@ -78,6 +78,8 @@ class ProceduralBotGenerator:
         gun_len = rng.randint(6, 12)
         pygame.draw.line(surf, (20, 20, 20), (16, 16), (16, 16-gun_len), 3)
             
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, None
 
     def generate_sniper(self, seed=None):
@@ -105,6 +107,8 @@ class ProceduralBotGenerator:
             p2 = (p1[0] + rng.randint(-4, 4), p1[1] + rng.randint(-4, 4))
             pygame.draw.line(surf, (30, 40, 20), p1, p2, 1)
             
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, None
 
     def generate_scout(self, seed=None):
@@ -122,6 +126,8 @@ class ProceduralBotGenerator:
         # Engine trails?
         pygame.draw.line(surf, (100, 200, 255), (16, 28), (16, 32), 2)
         
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, None
 
     def generate_ambusher(self, biome="forest", seed=None):
@@ -158,6 +164,8 @@ class ProceduralBotGenerator:
         # Hidden Eye
         pygame.draw.circle(surf, (255, 255, 0), (16, 16), 3)
         
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, None
 
     def _generate_mech_boss(self, rng):
@@ -268,6 +276,8 @@ class ProceduralBotGenerator:
                 pygame.draw.circle(surf, (255, 255, 255), (cx+40+i*8, cy-10), 3)
             weapons.append({"type": "missile", "damage": 30, "speed": 200, "cooldown": 3.0, "synergy": "explosion"})
 
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, {"weapons": weapons}
 
     def generate_boss(self, seed=None):
@@ -356,4 +366,34 @@ class ProceduralBotGenerator:
         if rng.random() < 0.5:
              weapons.append({"type": "turret", "damage": 10, "speed": 400, "cooldown": 0.5, "synergy": "kinetic"})
         
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
         return surf, {"weapons": weapons}
+
+    def generate_player(self, energy_type="neutral", seed=None):
+        rng = random.Random(seed) if seed is not None else random.Random()
+        surf = pygame.Surface((48, 48), pygame.SRCALPHA)
+        center = (24, 24)
+        
+        color_map = {
+            "neutral": (150, 150, 150),
+            "fire": (255, 100, 50),
+            "ice": (100, 200, 255),
+            "vortex": (150, 50, 255),
+            "lightning": (255, 255, 100),
+            "kinetic": (200, 200, 200),
+            "vampiric": (200, 50, 100),
+            "plasma": (50, 255, 100)
+        }
+        main_color = color_map.get(energy_type, (150, 150, 150))
+        
+        self._draw_ngon(surf, main_color, center, 18, 6)
+        self._draw_ngon(surf, (255, 255, 255), center, 18, 6, 2)
+        pygame.draw.circle(surf, (255, 255, 255), center, 6)
+        
+        pygame.draw.rect(surf, (100, 100, 100), (4, 16, 8, 16))
+        pygame.draw.rect(surf, (100, 100, 100), (36, 16, 8, 16))
+        
+        from systems.graphics_engine import ProceduralGenerator
+        surf = ProceduralGenerator.apply_snes_effect(surf)
+        return surf, None

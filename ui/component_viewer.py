@@ -178,8 +178,23 @@ class ComponentViewer:
             pygame.draw.rect(screen, (0, 0, 0, 200), bg_rect) # Dark semi-transparent box
             screen.blit(stat_surface, (self.panel_x + 30, y_offset + i * 30))
             
+        # Upgrade Info
+        if self.player:
+            shards = self.player.currencies.get("shards", 0)
+            cost = component.get_upgrade_cost()
+            upg_text = f"Lvl: {component.level} | Cost: {cost} Shards | Have: {shards}"
+            color = (150, 255, 150) if shards >= cost else (255, 150, 150)
+            upg_surf = self.font_normal.render(upg_text, True, color)
+            
+            # Use black background
+            upg_rect = upg_surf.get_rect(topleft=(self.panel_x + 30, y_offset + len(stat_lines) * 30 + 10))
+            bg_rect_upg = upg_rect.copy()
+            bg_rect_upg.inflate_ip(10, 4)
+            pygame.draw.rect(screen, (0, 0, 0, 200), bg_rect_upg)
+            screen.blit(upg_surf, upg_rect)
+
         # Instructions
-        instr_text = "Arrows: Cycle | E: Edit Grid | ESC: Close"
+        instr_text = "Arrows: Cycle | E: Edit Grid | U: Upgrade | ESC: Close"
         instr_surf = self.font_normal.render(instr_text, True, (150, 255, 150)) # Bright green hint
         instr_rect = instr_surf.get_rect(centerx=panel_rect.centerx, bottom=panel_rect.bottom - 20)
         screen.blit(instr_surf, instr_rect)

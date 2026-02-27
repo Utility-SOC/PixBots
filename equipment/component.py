@@ -706,392 +706,189 @@ class ComponentEquipment:
         return comp
 
 # --- Factory Functions ---
+import json
+import os
+import random
+from hex_system.hex_coord import HexCoord
 
-def create_starter_torso() -> ComponentEquipment:
-    torso = ComponentEquipment(name="Basic Torso Mk I", slot="torso", quality="Common", base_armor=5, base_hp=50)
-    # Shape: 3x3 block
-    torso.valid_coords = {
-        HexCoord(0,0), HexCoord(1,0), HexCoord(2,0),
-        HexCoord(0,1), HexCoord(1,1), HexCoord(2,1),
-        HexCoord(0,2), HexCoord(1,2), HexCoord(2,2)
-    }
-    torso.core = EnergyCore(core_type=SynergyType.FIRE, generation_rate=100.0, position=HexCoord(1, 1))
-    
-    # Place visual tile for the reactor
-    from hex_system.hex_tile import ReactorTile, HexTile
-    torso.place_tile(HexCoord(1, 1), ReactorTile())
-    
-    # Fill the rest with generic tiles to allow flow
-    for q in range(3):
-        for r in range(3):
-            coord = HexCoord(q, r)
-            if coord != HexCoord(1, 1):
-                torso.place_tile(coord, HexTile(tile_type="Conductor", description="Conducts energy."))
-    
-    return torso
+_COMPONENT_DATA = None
 
-def create_starter_arm(slot: str) -> ComponentEquipment:
+def _load_component_data():
+    global _COMPONENT_DATA
+    if _COMPONENT_DATA is None:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        data_path = os.path.join(base_path, "data", "components.json")
+        try:
+            with open(data_path, 'r') as f:
+                _COMPONENT_DATA = json.load(f)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Failed to load components.json: {e}")
+            _COMPONENT_DATA = {"starter": {}, "shapes": {}}
+
+def _create_from_template(category: str, template_id: str) -> 'ComponentEquipment':
+    _load_component_data()
+    data = _COMPONENT_DATA.get(category, {}).get(template_id)
+    if not data:
+        # Fallback
+        return ComponentEquipment(name=f"Fallback {template_id}", slot=template_id)
+    
+    comp = ComponentEquipment(
+        name=data.get("name", "Unknown"),
+        slot=data.get("slot", "torso"),
+        quality=data.get("quality", "Common"),
+        base_armor=data.get("base_armor", 0),
+        base_hp=data.get("base_hp", 0)
+    )
+    
+    comp.valid_coords = {HexCoord(c[0], c[1]) for c in data.get("valid_coords", [])}
+    
+    from hex_system.hex_tile import HexTile, ReactorTile, ResonatorTile, SplitterTile, WeaponMountTile, AmplifierTile, TileCategory
+    from hex_system.energy_packet import EnergyCore, SynergyType
+    
+    if "core" in data:
+        cdata = data["core"]
+        ctype = getattr(SynergyType, cdata["type"].upper(), SynergyType.RAW)
+        comp.core = EnergyCore(core_type=ctype, generation_rate=cdata["rate"], position=HexCoord(cdata["pos"][0], cdata["pos"][1]))
+    
+    fill_tile_type = data.get("fill_tile", "Conductor")
+    
+    # Place special tiles
+    for tdata in data.get("tiles", []):
+        pos = HexCoord(tdata["pos"][0], tdata["pos"][1])
+        ttype = tdata["type"]
+        tile = None
+        if ttype == "Reactor": tile = ReactorTile()
+        elif ttype == "Resonator": tile = ResonatorTile()
+        elif ttype == "Splitter": tile = SplitterTile()
+        elif ttype == "Amplifier": tile = AmplifierTile()
+        elif ttype == "Weapon Mount":
+            cat = getattr(TileCategory, tdata.get("category", "OUTPUT"))
+            tile = WeaponMountTile(tile_type="Weapon Mount", category=cat, weapon_type=tdata.get("weapon_type", "beam"))
+        
+        if tile:
+            comp.place_tile(pos, tile)
+            
+    # Fill remaining
+    for coord in comp.valid_coords:
+        if coord not in comp.tile_slots:
+            comp.place_tile(coord, HexTile(tile_type=fill_tile_type, description="Conducts energy."))
+            
+    return comp
+
+def create_starter_torso() -> 'ComponentEquipment':
+    return _create_from_template("starter", "torso")
+
+def create_starter_arm(slot: str) -> 'ComponentEquipment':
     if slot not in ["left_arm", "right_arm"]:
         raise ValueError("Arm slot must be 'left_arm' or 'right_arm'")
-    side = "Right" if "right" in slot else "Left"
-    arm = ComponentEquipment(name=f"Basic {side} Arm", slot=slot, quality="Common", base_armor=2)
-    
-    # Shape: Simple: 4x1 strip
-    arm.valid_coords = {
-        HexCoord(0,1), HexCoord(1,1), HexCoord(2,1), HexCoord(3,1)
-    }
-    
-    # FIX: Correctly instantiate WeaponMountTile with the right arguments.
-    from hex_system.hex_tile import WeaponMountTile, TileCategory, HexTile
-    weapon_mount = WeaponMountTile(tile_type="Weapon Mount", category=TileCategory.OUTPUT, weapon_type="beam")
-    
-    # Place at end
-    if slot == "left_arm":
-        arm.place_tile(HexCoord(0, 1), weapon_mount) # Exit at left
-    else:
-        arm.place_tile(HexCoord(3, 1), weapon_mount) # Exit at right
-        
-    # Fill rest with conductors
-    for coord in arm.valid_coords:
-        if coord not in arm.tile_slots:
-            arm.place_tile(coord, HexTile(tile_type="Conductor", description="Conducts energy."))
-        
-    return arm
+    return _create_from_template("starter", slot)
 
-def create_starter_leg(slot: str) -> ComponentEquipment:
+def create_starter_leg(slot: str) -> 'ComponentEquipment':
     if slot not in ["left_leg", "right_leg"]:
         raise ValueError("Leg slot must be 'left_leg' or 'right_leg'")
-    side = "Right" if "right" in slot else "Left"
-    leg = ComponentEquipment(name=f"Basic {side} Leg", slot=slot, quality="Common", base_speed=1.5)
-    
-    # Shape: Vertical strip 2x4
-    leg.valid_coords = {
-        HexCoord(1,0), 
-        HexCoord(1,1), 
-        HexCoord(1,2), 
-        HexCoord(1,3),
-        HexCoord(0,3) # Foot
-    }
-    
-    # Fill with conductors
-    from hex_system.hex_tile import HexTile
-    for coord in leg.valid_coords:
-        if coord not in leg.tile_slots:
-            leg.place_tile(coord, HexTile(tile_type="Conductor", description="Conducts energy."))
-            
-    return leg
+    return _create_from_template("starter", slot)
 
-def create_starter_head() -> ComponentEquipment:
-    head = ComponentEquipment(name="Basic Head", slot="head", quality="Common", base_armor=1)
-    # Shape: Hexagon-ish (Center + ring)
-    head.valid_coords = {
-        HexCoord(1,0), HexCoord(2,0),
-        HexCoord(0,1), HexCoord(1,1), HexCoord(2,1), HexCoord(3,1),
-        HexCoord(1,2), HexCoord(2,2)
-    }
-    
-    # Fill with conductors
-    from hex_system.hex_tile import HexTile
-    for coord in head.valid_coords:
-        if coord not in head.tile_slots:
-            head.place_tile(coord, HexTile(tile_type="Conductor", description="Conducts energy."))
-            
-    return head
+def create_starter_head() -> 'ComponentEquipment':
+    return _create_from_template("starter", "head")
 
-def create_starter_back() -> ComponentEquipment:
-    back = ComponentEquipment(name="Basic Back Unit", slot="back", quality="Common")
-    # Shape: T-shape or Wings
-    back.valid_coords = {
-        HexCoord(0,0), HexCoord(1,0), HexCoord(2,0), HexCoord(3,0),
-        HexCoord(1,1), HexCoord(2,1)
-    }
-    
-    # Fill with conductors
-    from hex_system.hex_tile import HexTile
-    for coord in back.valid_coords:
-        if coord not in back.tile_slots:
-            back.place_tile(coord, HexTile(tile_type="Conductor", description="Conducts energy."))
-            
-    return back
+def create_starter_back() -> 'ComponentEquipment':
+    return _create_from_template("starter", "back")
 
-def create_random_component(rarity: str = "Common", slot: str = None) -> ComponentEquipment:
-    import random
-    from hex_system.hex_tile import HexTile, AmplifierTile, ResonatorTile, WeaponMountTile, TileCategory, SplitterTile
-    
+def create_random_component(rarity: str = "Common", slot: str = None) -> 'ComponentEquipment':
+    _load_component_data()
     slots = ["head", "torso", "left_arm", "right_arm", "left_leg", "right_leg", "back"]
     if slot is None:
         slot = random.choice(slots)
-    
+        
     base_armor = random.randint(1, 5)
     base_hp = random.randint(10, 50)
     base_speed = 0.0
     
     if rarity == "Uncommon":
-        base_armor += 2
-        base_hp += 20
+        base_armor += 2; base_hp += 20
     elif rarity == "Rare":
-        base_armor += 5
-        base_hp += 50
+        base_armor += 5; base_hp += 50
     elif rarity == "Epic":
-        base_armor += 10
-        base_hp += 100
+        base_armor += 10; base_hp += 100
     elif rarity == "Legendary":
-        base_armor += 20
-        base_hp += 200
+        base_armor += 20; base_hp += 200
         
     comp = ComponentEquipment(name=f"{rarity} {slot}", slot=slot, quality=rarity, base_armor=base_armor, base_hp=base_hp, base_speed=base_speed)
     
-    entry = None
-    target_hex = None
+    shapes = _COMPONENT_DATA.get("shapes", {})
+    # Map arm/leg to slot
+    shape_key = slot
+    if "arm" in slot: shape_key = "arm"
+    if "leg" in slot: shape_key = "leg"
     
-    # --- Custom Grid Shape Generation ---
+    rarity_shapes = shapes.get(shape_key, {}).get(rarity, shapes.get(shape_key, {}).get("Common", []))
+    if not rarity_shapes:
+        rarity_shapes = [{"w": 3, "h": 3, "remove": []}] # fallback
+        
+    shape = random.choice(rarity_shapes)
     valid_coords = set()
     
-    # Helper to add rect
-    def add_rect(w, h, offset_q=0, offset_r=0):
-        for q in range(w):
-            for r in range(h):
-                valid_coords.add(HexCoord(q + offset_q, r + offset_r))
-
-    if slot == "torso":
-        # Torso: Large, symmetric block or blob
-        if rarity in ["Common", "Uncommon"]:
-            add_rect(3, 3)
-        elif rarity == "Rare":
-            add_rect(4, 4)
-        else:
-            # Cross shape or 5x5 with corners cut
-            add_rect(5, 5)
-            # Remove corners
-            valid_coords.remove(HexCoord(0, 0))
-            valid_coords.remove(HexCoord(4, 0))
-            valid_coords.remove(HexCoord(0, 4))
-            valid_coords.remove(HexCoord(4, 4))
+    if "coords" in shape:
+        valid_coords = {HexCoord(c[0], c[1]) for c in shape["coords"]}
+    else:
+        for q in range(shape.get("w", 3)):
+            for r in range(shape.get("h", 3)):
+                valid_coords.add(HexCoord(q, r))
+        for r_coord in shape.get("remove", []):
+            rc = HexCoord(r_coord[0], r_coord[1])
+            if rc in valid_coords: valid_coords.remove(rc)
+        for a_coord in shape.get("add", []):
+            valid_coords.add(HexCoord(a_coord[0], a_coord[1]))
             
-    elif slot == "head":
-        # Head: Smaller, symmetric
-        if rarity == "Common":
-            add_rect(3, 2) # Wide
-        elif rarity == "Uncommon":
-            add_rect(2, 3) # Tall
-        else:
-            # Diamond-ish
-            valid_coords.add(HexCoord(1, 0))
-            valid_coords.add(HexCoord(0, 1))
-            valid_coords.add(HexCoord(1, 1))
-            valid_coords.add(HexCoord(2, 1))
-            valid_coords.add(HexCoord(1, 2))
-            if rarity == "Legendary":
-                valid_coords.add(HexCoord(0, 2))
-                valid_coords.add(HexCoord(2, 0))
-
-    elif slot in ["left_arm", "right_arm"]:
-        # Arms: Elongated horizontally
-        width = 4 if rarity in ["Common", "Uncommon"] else 5
-        height = 2
-        if rarity == "Legendary": height = 3
-        
-        add_rect(width, height)
-        
-        # Make it look like an arm (tapered?)
-        if rarity != "Common":
-            if HexCoord(0, 0) in valid_coords: valid_coords.remove(HexCoord(0, 0))
-            if HexCoord(width-1, height-1) in valid_coords: valid_coords.remove(HexCoord(width-1, height-1))
-
-    elif slot in ["left_leg", "right_leg"]:
-        # Legs: Elongated vertically
-        width = 2
-        height = 4 if rarity in ["Common", "Uncommon"] else 5
-        if rarity == "Legendary": width = 3
-        
-        add_rect(width, height)
-        
-    elif slot == "back":
-        # Back: Symmetric, medium
-        add_rect(3, 3)
-        if rarity != "Common":
-            valid_coords.add(HexCoord(1, -1)) # Top center extension
-            valid_coords.add(HexCoord(1, 3))  # Bottom center extension
-            
-    # Apply generated coords
+    comp.valid_coords = valid_coords
+    qs = [c.q for c in valid_coords]
+    rs = [c.r for c in valid_coords]
     if valid_coords:
-        comp.valid_coords = valid_coords
-        # Recalculate dimensions
-        qs = [c.q for c in valid_coords]
-        rs = [c.r for c in valid_coords]
         comp.grid_width = max(qs) - min(qs) + 1
         comp.grid_height = max(rs) - min(rs) + 1
         comp.max_tile_capacity = len(valid_coords)
     
-    # Ensure arms have a weapon mount
-    if slot in ["left_arm", "right_arm"]:
-        # 50% chance for weapon mount on random arms, or 100% if it's a "Weapon"
-        # The user expects weapons to work, so let's be generous.
-        from hex_system.hex_tile import WeaponMountTile, TileCategory, HexTile, AmplifierTile, ResonatorTile, SplitterTile
-        
-        # Determine weapon mount position (usually far side)
+    from hex_system.hex_tile import HexTile, AmplifierTile, ResonatorTile, WeaponMountTile, TileCategory, SplitterTile
+    
+    if "arm" in slot:
         entry, exit_hex = comp.get_entry_exit_hexes()
         mount_pos = exit_hex if exit_hex else HexCoord(1, 1)
-        
-        # Ensure mount_pos is valid
         if mount_pos not in comp.valid_coords:
-             # Fallback to any valid coord
-             mount_pos = list(comp.valid_coords)[-1]
+            if valid_coords:
+                mount_pos = list(comp.valid_coords)[-1]
+            else:
+                mount_pos = HexCoord(0,0)
+        comp.place_tile(mount_pos, WeaponMountTile(tile_type="Weapon Mount", category=TileCategory.OUTPUT, weapon_type="beam"))
         
-        mount = WeaponMountTile(tile_type="Weapon Mount", category=TileCategory.OUTPUT, weapon_type="beam")
-        comp.place_tile(mount_pos, mount)
-        
-    # If Torso, generate a Core and ReactorTile
     if slot == "torso":
         from hex_system.energy_packet import EnergyCore, SynergyType
-        # Random synergy
         syn_type = random.choice(list(SynergyType))
-        # Higher rarity = higher rate
-        rate = 10.0
-        if rarity == "Uncommon": rate = 20.0
-        elif rarity == "Rare": rate = 40.0
-        elif rarity == "Epic": rate = 70.0
-        elif rarity == "Legendary": rate = 100.0
-        
+        rate = {"Common": 10.0, "Uncommon": 20.0, "Rare": 40.0, "Epic": 70.0, "Legendary": 100.0}.get(rarity, 10.0)
         comp.core = EnergyCore(generation_rate=rate, core_type=syn_type)
         
-        # Place ReactorTile at center
-        center_q = (min(c.q for c in comp.valid_coords) + max(c.q for c in comp.valid_coords)) // 2
-        center_r = (min(c.r for c in comp.valid_coords) + max(c.r for c in comp.valid_coords)) // 2
-        center = HexCoord(center_q, center_r)
-        
-        if center not in comp.valid_coords:
-             # Find closest valid
-             center = min(comp.valid_coords, key=lambda c: (c.q - center_q)**2 + (c.r - center_r)**2)
-
+        if valid_coords:
+            center_q = sum(qs) // len(qs)
+            center_r = sum(rs) // len(rs)
+            center = HexCoord(center_q, center_r)
+            if center not in comp.valid_coords:
+                center = list(comp.valid_coords)[0]
+        else:
+            center = HexCoord(0,0)
+            
         comp.core.position = center
         from hex_system.hex_tile import ReactorTile
         comp.place_tile(center, ReactorTile())
-            
-        # Update entry for pathfinding to be the reactor
-        entry = center
-
-    # Ensure a valid path exists from entry to exit (or mount)
-    # If Torso, entry is the Reactor (center). Target is... random edge?
-    if slot == "torso":
-        # Pick a random edge hex as target to ensure at least one output
-        edges = [h for h in comp.valid_coords if len([n for n in range(6) if comp._get_neighbor_in_direction(h, n) not in comp.valid_coords]) > 0]
-        if edges:
-            target_hex = random.choice(edges)
-        else:
-            target_hex = list(comp.valid_coords)[0]
-    else:
-        entry, exit_hex = comp.get_entry_exit_hexes()
-        target_hex = exit_hex
-    
-    # If it's an arm, target the weapon mount
-    if slot in ["left_arm", "right_arm"]:
-        # Find the weapon mount
-        for coord, tile in comp.tile_slots.items():
-            if isinstance(tile, WeaponMountTile):
-                target_hex = coord
-                break
-    
-    if entry and target_hex and entry != target_hex:
-        # Simple pathfinding to ensure connection
-        current = entry
-        path = [current]
         
-        # Greedy path to target
-        while current != target_hex:
-            # Find neighbor closest to target
-            best_dist = float('inf')
-            best_next = None
-            best_dir = 0
-            
-            for direction in range(6):
-                next_coord = comp._get_neighbor_in_direction(current, direction)
-                if next_coord in comp.valid_coords:
-                    dist = ((next_coord.q - target_hex.q)**2 + (next_coord.r - target_hex.r)**2)**0.5
-                    if dist < best_dist:
-                        best_dist = dist
-                        best_next = next_coord
-                        best_dir = direction
-            
-            if best_next:
-                # If we are placing a tile at 'current', it should point to 'best_dir'
-                # But we place tiles AFTER finding the path. We need to store directions.
-                # Actually, let's just store the path and deduce directions later.
-                current = best_next
-                path.append(current)
-                if len(path) > 20: break # Safety break
-            else:
-                break
-        
-        # Fill path with high-quality tiles AND orient them
-        from hex_system.hex_tile import BasicConduitTile
-        
-        for i in range(len(path) - 1):
-            coord = path[i]
-            next_coord = path[i+1]
-            
-            # Determine direction from coord to next_coord
-            # We can cheat and check neighbors or just use the logic we just used?
-            # Let's find direction index
-            exit_dir = 0
-            for d in range(6):
-                if comp._get_neighbor_in_direction(coord, d) == next_coord:
-                    exit_dir = d
-                    break
-            
-            if coord not in comp.tile_slots:
-                # High chance for amplifier on the main path for high rarity
-                roll = random.random()
-                tile = None
-                
-                if rarity == "Legendary" and roll < 0.7:
-                    # NOW we can use AmplifierTile because it inherits BasicConduitTile!
-                    tile = AmplifierTile()
-                    tile.set_exit_direction(exit_dir)
-                    
-                    # Add a small merge bonus to make it even better
-                    tile.merge_bonus = 0.05
-                
-                elif rarity == "Epic" and roll < 0.5:
-                    tile = AmplifierTile()
-                    tile.set_exit_direction(exit_dir)
-                
-                else:
-                    tile = BasicConduitTile()
-                    tile.set_exit_direction(exit_dir)
-                    
-                    # If it's legendary, maybe upgrade the conduit?
-                    if rarity in ["Epic", "Legendary"]:
-                        tile.merge_bonus = 0.1 * (1 if rarity == "Epic" else 2) # 10-20% bonus
-                        tile.base_color = (255, 200, 100) # Gold-ish
-                        tile.name = "Super Conduit"
-                
-                comp.place_tile(coord, tile)
-
-    # Fill the rest of the grid with random tiles based on rarity
-    import random
+    chance_amp = {"Uncommon": 0.1, "Rare": 0.2, "Epic": 0.3, "Legendary": 0.4}.get(rarity, 0.0)
+    chance_res = {"Uncommon": 0.0, "Rare": 0.1, "Epic": 0.2, "Legendary": 0.3}.get(rarity, 0.0)
     
     for coord in comp.valid_coords:
         if coord not in comp.tile_slots:
-            # Chance for special tiles based on rarity
             roll = random.random()
-            tile = None
-            
-            chance_amp = 0.0
-            chance_res = 0.0
-            
-            if rarity == "Uncommon": chance_amp = 0.1
-            elif rarity == "Rare": chance_amp = 0.2; chance_res = 0.1
-            elif rarity == "Epic": chance_amp = 0.3; chance_res = 0.2
-            elif rarity == "Legendary": chance_amp = 0.4; chance_res = 0.3
-            
-            if roll < chance_amp:
-                tile = AmplifierTile()
-            elif roll < chance_amp + chance_res:
-                tile = ResonatorTile()
-            else:
-                tile = HexTile(tile_type="Conductor", description="Conducts energy.")
-                
+            if roll < chance_amp: tile = AmplifierTile()
+            elif roll < chance_amp + chance_res: tile = ResonatorTile()
+            else: tile = HexTile(tile_type="Conductor", description="Conducts energy.")
             comp.place_tile(coord, tile)
             
     return comp

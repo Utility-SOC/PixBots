@@ -17,13 +17,13 @@ class Enemy(Bot):
         # but here we want variety.
         seed = random.randint(0, 999999)
         
-        if ai_class == "sniper":
+        if ai_class.lower() == "sniper":
             sprite, metadata = self._generator.generate_sniper(seed)
-        elif ai_class == "ambusher":
+        elif ai_class.lower() == "ambusher":
             sprite, metadata = self._generator.generate_ambusher(biome, seed)
-        elif ai_class == "scout":
+        elif ai_class.lower() == "scout":
             sprite, metadata = self._generator.generate_scout(seed)
-        elif ai_class == "Boss":
+        elif ai_class.lower() == "boss":
             sprite, metadata = self._generator.generate_boss(seed)
         else: # Grunt
             sprite, metadata = self._generator.generate_grunt(seed)

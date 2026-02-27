@@ -232,7 +232,43 @@ class CombatSystem:
                 continue
                 
             if game_map.terrain[tile_y][tile_x] in constants.NON_WALKABLE_TERRAIN:
-                p.active = False
+                # Grace period to prevent blowing up inside the wall if spawned too close
+                if p.lifetime < constants.PROJECTILE_LIFETIME - 0.05:
+                    p.active = False
+                continue
+                
+            # Obstacle Collision (Destructible Terrain)
+            hit_obstacle = False
+            for (ox, oy), obs in list(game_map.obstacles.items()):
+                # Generous bounding box for obstacle
+                obs_rect = pygame.Rect(ox * constants.TILE_SIZE, oy * constants.TILE_SIZE, constants.TILE_SIZE, constants.TILE_SIZE)
+                if obs_rect.collidepoint(p.x, p.y):
+                    if p.lifetime < constants.PROJECTILE_LIFETIME - 0.05:
+                        p.active = False
+                        
+                        # Apply Damage to Obstacle
+                        can_damage = False
+                        syn = getattr(p, "effects", {}).get("synergy_name")
+                        if syn == "explosion" and "explosive" in obs.destructible_by: can_damage = True
+                        elif syn == "fire" and "fire" in obs.destructible_by: can_damage = True
+                        elif syn == "kinetic" and "kinetic" in obs.destructible_by: can_damage = True
+                        elif p.damage_type == "physical" and "kinetic" in obs.destructible_by: can_damage = True
+                        elif "explosive" in obs.destructible_by and p.damage > 50: can_damage = True # High damage breaks explosive
+                        else: can_damage = True # Fallback: let anything damage it slowly
+                        
+                        if can_damage:
+                            obs.hp -= p.damage
+                            if obs.hp <= 0:
+                                del game_map.obstacles[(ox, oy)]
+                                # Visual feedback
+                                self.visual_effects.append(VisualEffect(
+                                    "implosion", ox * constants.TILE_SIZE + constants.TILE_SIZE/2, oy * constants.TILE_SIZE + constants.TILE_SIZE/2, 
+                                    radius=30, duration=0.2
+                                ))
+                    hit_obstacle = True
+                    break
+            
+            if hit_obstacle:
                 continue
                 
             # Entity Collision
@@ -472,19 +508,19 @@ class CombatSystem:
         self.vortices.append(v)
 
     def deal_damage(self, target, amount, source=None):
-        health_before = target.hp
-        target.take_damage(amount)
-        if target.name == "Player" and self.behavior_system is not None and source is not None:
-            from entities.enemy import Enemy
-            if isinstance(source, Enemy):
+        if hasattr(target, 'take_damage'):
+            hp_before = getattr(target, 'hp', 0)
+            target.take_damage(amount)
+            hp_after = getattr(target, 'hp', 0)
+            
+            if getattr(target, "name", "") == "Player" and self.behavior_system and source:
                 enemy_id = str(id(source))
-                self.behavior_system.track_player_damage(
-                    damage_amount=amount,
-                    player_health_before=health_before,
-                    player_health_after=target.hp,
-                    enemy_id=enemy_id,
-                    enemy_class=source.ai_class
-                )
+                enemy_class = getattr(source, "ai_class", "grunt")
+                if hasattr(source, "owner_bot") and source.owner_bot:
+                    enemy_id = str(id(source.owner_bot))
+                    enemy_class = getattr(source.owner_bot, "ai_class", "grunt")
+                    
+                self.behavior_system.track_player_damage(amount, hp_before, hp_after, enemy_id, enemy_class)
 
     def spawn_zone_effect(self, effect_type, x, y, radius, duration, **kwargs):
         z = ZoneEffect(effect_type, x, y, radius, duration, **kwargs)

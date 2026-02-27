@@ -1,0 +1,33 @@
+{
+    "id": "extraction_01",
+    "name": "Hold the Line",
+    "type": "extraction",
+    "description": "Defend the extraction point for 5 minutes.",
+    "lore": "Memory Log: We found a massive cache of old-world technology, but our activity woke the swarm. Hold them off until the dropship arrives.",
+    "size": {
+        "width": 60,
+        "height": 60
+    },
+    "generation_params": {
+        "biome": "desert",
+        "terrain_density": 0.1,
+        "obstacle_density": 0.05,
+        "base_enemy_level": 8
+    },
+    "camera": {
+        "zoom_level": 1.0
+    },
+    "objectives": [
+        {
+            "type": "survive",
+            "time_limit": 300
+        }
+    ],
+    "enemies": {
+        "density": 0.08,
+        "composition": {
+            "grunt": 0.8,
+            "ambusher": 0.2
+        }
+    }
+}

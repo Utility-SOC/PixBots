@@ -18,7 +18,7 @@ class Player(Bot):
         self.level = 1 # Player Level
         self.alpha = 255 # Explicitly init alpha for visibility safety (Fixes invisible bug)
         
-        self.sprite_name = "player_bot.png"
+        self.sprite_name = None # Replaced with dynamic generation in recalculate_stats
         
         self.recalculate_stats()
         self.hp = self.max_hp
@@ -378,6 +378,31 @@ class Player(Bot):
                             "component": comp,
                             "slot": slot
                         })
+                        self.speed -= 0.5
+
+        # Re-generate dynamic sprite
+        self._generate_sprite()
+
+    def _generate_sprite(self):
+        from entities.sprite_generator import ProceduralBotGenerator
+        gen = ProceduralBotGenerator()
+        
+        dominant = "neutral"
+        if hasattr(self, 'synergies') and self.synergies:
+            synergy_counts = {}
+            for row in self.synergies:
+                for s in row:
+                    if s: synergy_counts[s] = synergy_counts.get(s, 0) + 1
+            if synergy_counts:
+                dominant = max(synergy_counts, key=synergy_counts.get)
+        
+        surface, _ = gen.generate_player(energy_type=dominant)
+        self.sprite = surface
+        if self.sprite:
+            self.mask = pygame.mask.from_surface(self.sprite)
+
+    def handle_input(self, input_action: str):
+        pass # This method was empty in the provided snippet, assuming it's a placeholder.
 
     def add_to_inventory(self, item):
         self.inventory.append(item)

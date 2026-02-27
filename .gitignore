@@ -34,6 +34,7 @@ Include/
 pyvenv.cfg
 
 # Logs and Debug
+logs/
 *.log
 *.txt
 !requirements.txt
@@ -50,11 +51,6 @@ verify_log*.txt
 # Test and Verification Scripts
 tests/
 tools/
-verify_*.py
-test_*.py
-fix_*.py
-reproduce_*.py
-simple_verify.py
 check_*.py
 read_log.py
 context_*.txt

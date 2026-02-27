@@ -80,7 +80,9 @@ class BehaviorMutator:
     def mutate_behavior(self, parent1: BehaviorEntry, parent2: BehaviorEntry) -> BehaviorEntry:
         """Combine two behaviors into a new mutation."""
         self.mutation_counter += 1
-        mutation_id = f"mutation_{self.mutation_counter}_{parent1.id}_{parent2.id}"
+        short_p1 = parent1.id.split('_')[0][:8]
+        short_p2 = parent2.id.split('_')[0][:8]
+        mutation_id = f"mutation_{self.mutation_counter}_{short_p1}_{short_p2}"
         
         # Combine parameters from both parents
         combined_params = {**parent1.parameters, **parent2.parameters}
@@ -404,7 +406,7 @@ class BehaviorSystem:
         self.behaviors[target_class].append(adapted_behavior)
         self.constellation_matrix.add_behavior_id(adapted_behavior.id)
         
-        logger.info(f"📡 SPREAD: {behavior.id} → {target_class} as {adapted_behavior.id}")
+        logger.info(f"SPREAD: {behavior.id} -> {target_class} as {adapted_behavior.id}")
     
     def get_stats(self) -> Dict:
         """Get current system stats for debugging."""

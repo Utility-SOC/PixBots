@@ -1,0 +1,33 @@
+{
+    "id": "boss_01",
+    "name": "Tundra Alpha",
+    "type": "boss",
+    "description": "Locate and eliminate the corrupted Alpha core.",
+    "lore": "Memory Log: The cold preserves... but it also twists. The Overseer in this sector has cannibalized hundreds of scout units to build itself a fortress.",
+    "size": {
+        "width": 50,
+        "height": 50
+    },
+    "generation_params": {
+        "biome": "tundra",
+        "terrain_density": 0.6,
+        "obstacle_density": 0.3,
+        "base_enemy_level": 15
+    },
+    "camera": {
+        "zoom_level": 1.2
+    },
+    "objectives": [
+        {
+            "type": "assassinate",
+            "target": "boss"
+        }
+    ],
+    "enemies": {
+        "density": 0.02,
+        "composition": {
+            "sniper": 0.5,
+            "boss": 0.5
+        }
+    }
+}

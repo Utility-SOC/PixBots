@@ -39,12 +39,14 @@ from equipment.component import (
 
 # --- UI Imports ---
 from ui.main_menu import MainMenu
+from ui.garage_menu import GarageMenu
 from ui.component_viewer import ComponentViewer
 from ui.hex_editor import ComponentHexEditor
 from ui.crafting_menu import CraftingMenu
 from ui.equipment_menu import EquipmentMenu
 from ui.reactor_menu import ReactorDebugMenu
 from ui.help_screen import HelpScreen
+from ui.mission_select import MissionSelectMenu
 
 from typing import Optional
 
@@ -85,13 +87,14 @@ class Game:
 
         # UI Screens
         self.main_menu = MainMenu(self.screen, self.asset_manager)
+        self.garage_menu = GarageMenu(self.screen, self.asset_manager, None)
         self.component_viewer = ComponentViewer(self.screen, self.asset_manager)
         self.hex_editor: Optional[ComponentHexEditor] = None
         self.crafting_menu: Optional[CraftingMenu] = None
         self.equipment_menu: Optional[EquipmentMenu] = None
-        self.equipment_menu: Optional[EquipmentMenu] = None
         self.reactor_menu: Optional[ReactorDebugMenu] = None
         self.help_screen = HelpScreen(self.screen, self.asset_manager)
+        self.mission_select_menu: Optional[MissionSelectMenu] = None # Initialize as Optional
 
         # World and Camera
         self.game_map: Optional[GameMap] = None
@@ -103,8 +106,12 @@ class Game:
         self.all_bots = []
         
         # Debug State
-        self.debug_spawn_step = "rarity" # rarity, slot
+        self.debug_spawn_step = "type" # type -> rarity -> slot
         self.debug_selected_rarity = "Common"
+        
+        self.active_objectives = []
+        self.mission_time_elapsed = 0.0
+        self.indicator_angle = None
         
         self.music_check_timer = 0.0
         
@@ -159,7 +166,7 @@ class Game:
                         if self.save_slot_menu.mode == "new":
                             logger.info(f"Starting new game in {slot}...")
                             self.initialize_game()
-                            self.state_manager.set_state(constants.STATE_PLAY)
+                            self.state_manager.set_state(constants.STATE_GARAGE)
                         else:
                             logger.info(f"Loading game from {slot}...")
                             result = self.save_load_system.load_game(self.current_profile, self.asset_manager)
@@ -171,7 +178,7 @@ class Game:
                                 if map_seed is None: map_seed = 12345
                                 self.game_map = GameMap(width=100, height=100, tile_size=constants.TILE_SIZE, asset_manager=self.asset_manager, seed=map_seed)
                                 
-                                self.state_manager.set_state(constants.STATE_PLAY)
+                                self.state_manager.set_state(constants.STATE_GARAGE)
                                 
                                 # Safety Check
                                 px_tile = int(self.player.x / constants.TILE_SIZE)
@@ -203,13 +210,53 @@ class Game:
                     # Ideally show a message "Saved"
                 # Handle other actions...
 
+            elif current_state == constants.STATE_GARAGE:
+                action = self.garage_menu.handle_input(event)
+                if action == "components":
+                    self.open_component_viewer()
+                elif action == "equipment":
+                    self.equipment_menu = EquipmentMenu(self.screen, self.asset_manager, self.player)
+                    self.state_manager.set_state(constants.STATE_EQUIPMENT)
+                elif action == "crafting":
+                    self.crafting_menu = CraftingMenu(self.screen, self.asset_manager, self.player)
+                    self.state_manager.set_state(constants.STATE_CRAFTING)
+                elif action == "missions":
+                    # Refresh missions in case new ones were added
+                    self.mission_select_menu = MissionSelectMenu(self.screen, self.asset_manager)
+                    self.state_manager.set_state(constants.STATE_MISSION_SELECT)
+                elif action == "main_menu":
+                    self.state_manager.set_state(constants.STATE_MENU)
+
+            elif current_state == constants.STATE_COMPONENT_VIEWER:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        self.state_manager.set_state(constants.STATE_GARAGE)
+                    elif event.key == pygame.K_RIGHT:
+                        self.component_viewer.cycle_component(1)
+                    elif event.key == pygame.K_LEFT:
+                        self.component_viewer.cycle_component(-1)
+                    elif event.key == pygame.K_e:
+                        comp = self.component_viewer.get_current_component()
+                        if comp:
+                            if not self.hex_editor:
+                                from ui.hex_editor import ComponentHexEditor
+                                self.hex_editor = ComponentHexEditor(comp, self.screen)
+                            else:
+                                self.hex_editor.component = comp
+                                self.hex_editor.tile_grid = comp.tile_slots.copy()
+                            self.state_manager.set_state(constants.STATE_HEX_EDITOR)
+
+            elif current_state == constants.STATE_HEX_EDITOR:
+                if self.hex_editor:
+                    action = self.hex_editor.handle_input(event)
+                    if action == "close":
+                        self.hex_editor.save_changes()
+                        self.state_manager.set_state(constants.STATE_COMPONENT_VIEWER)
+
             elif current_state == constants.STATE_PLAY:
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     self.state_manager.set_state(constants.STATE_PAUSE)
                     return # Consume event
-
-                if event.type == pygame.KEYDOWN and event.key in (pygame.K_v, pygame.K_c):
-                    self.open_component_viewer()
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     # Shooting
                     mx, my = pygame.mouse.get_pos()
@@ -229,14 +276,6 @@ class Game:
                     enemy.asset_manager = self.asset_manager
                     self.all_bots.append(enemy)
                     logger.info(f"Spawned enemy {enemy.name} at {ex}, {ey}")
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_k:
-                    # Open Crafting
-                    self.crafting_menu = CraftingMenu(self.screen, self.asset_manager, self.player)
-                    self.state_manager.set_state(constants.STATE_CRAFTING)
-                elif event.type == pygame.KEYDOWN and event.key == pygame.K_q:
-                    # Open Equipment menu
-                    self.equipment_menu = EquipmentMenu(self.screen, self.asset_manager, self.player)
-                    self.state_manager.set_state(constants.STATE_EQUIPMENT)
                 elif event.type == pygame.KEYDOWN and event.key == pygame.K_r:
                     # Open Reactor Debug menu
                     logger.info("Opening Reactor Debug Menu")
@@ -269,9 +308,9 @@ class Game:
                     if result:
                         loaded_player, map_seed = result
                         self.player = loaded_player
-                        # Force Asset Manager (Fix for Invisible Player)
+                        # Relink and Regenerate Dynamic Sprite (Fix for Invisible Player)
                         self.player.asset_manager = self.asset_manager
-                        self.player.sprite = None # Force reload
+                        self.player._generate_sprite() # Force reload dynamically generated sprite
                         logger.info(f"Game Loaded. Forced AssetManager on Player. Sprite Name: {self.player.sprite_name}")
 
                         # Re-link player to game map if needed (not strictly needed as player has x,y)
@@ -280,6 +319,7 @@ class Game:
                         
                         # Link player to UI
                         self.component_viewer.player = self.player
+                        self.garage_menu.player = self.player
                         
                         print("Game Loaded!")
 
@@ -348,8 +388,8 @@ class Game:
                     import random
                     
                     # 1. Always spawn a Boss
-                    bx = self.player.x + random.choice([-300, 300]) # Offset X
-                    by = self.player.y + random.choice([-300, 300]) # Offset Y
+                    bx = min(self.game_map.width * constants.TILE_SIZE - 100, max(100, self.player.x + random.choice([-300, 300])))
+                    by = min(self.game_map.height * constants.TILE_SIZE - 100, max(100, self.player.y + random.choice([-300, 300])))
                     boss_lvl = 20
                     boss = Enemy("Boss", bx, by, level=boss_lvl, ai_class="Boss")
                     boss.asset_manager = self.asset_manager
@@ -645,18 +685,28 @@ class Game:
                 action = self.crafting_menu.handle_input(event)
                 if action == "close":
                     self.crafting_menu = None
-                    self.state_manager.set_state(constants.STATE_PLAY)
+                    self.state_manager.set_state(constants.STATE_GARAGE)
 
             elif current_state == constants.STATE_EQUIPMENT and self.equipment_menu:
                 action = self.equipment_menu.handle_input(event)
                 if action == "close":
                     self.equipment_menu = None
-                    self.state_manager.set_state(constants.STATE_PLAY)
+                    self.state_manager.set_state(constants.STATE_GARAGE)
 
             elif current_state == constants.STATE_REACTOR and self.reactor_menu:
                 action = self.reactor_menu.handle_input(event)
                 if action == "close":
                     self.reactor_menu = None
+                    self.state_manager.set_state(constants.STATE_PLAY)
+                    
+            elif current_state == constants.STATE_MISSION_SELECT and self.mission_select_menu:
+                action = self.mission_select_menu.handle_input(event)
+                if action == "back":
+                    self.state_manager.set_state(constants.STATE_GARAGE)
+                elif isinstance(action, dict) and action.get("action") == "launch":
+                    mission_id = action.get("mission")
+                    logger.info(f"Launching mission: {mission_id}")
+                    self.load_mission(mission_id)
                     self.state_manager.set_state(constants.STATE_PLAY)
 
             elif current_state == constants.STATE_COMPONENT_VIEWER:
@@ -667,6 +717,16 @@ class Game:
                         self.component_viewer.cycle_component(-1)
                     elif event.key == pygame.K_RIGHT:
                         self.component_viewer.cycle_component(1)
+                    elif event.key == pygame.K_u:
+                        current_comp = self.component_viewer.get_current_component()
+                        if current_comp and self.player:
+                            cost = current_comp.get_upgrade_cost()
+                            shards = self.player.currencies.get("shards", 0)
+                            if shards >= cost:
+                                self.player.currencies["shards"] -= cost
+                                current_comp.upgrade()
+                                self.player.recalculate_stats()
+                                logger.info(f"Upgraded {current_comp.name} to level {current_comp.level}")
                     elif event.key == pygame.K_e:
                         current_comp = self.component_viewer.get_current_component()
                         if current_comp:
@@ -716,6 +776,7 @@ class Game:
                     if self.player:
                         self.player.recalculate_stats()
                     self.hex_editor = None
+                    # If navigating from garage, go back there
                     self.state_manager.set_state(constants.STATE_COMPONENT_VIEWER)
 
     def update(self, dt: float):
@@ -784,8 +845,40 @@ class Game:
             self.all_bots = [b for b in self.all_bots if b.hp > 0]
             if self.player.hp <= 0:
                 logger.info("Player died!")
-                # Respawn logic or game over could go here
-                self.initialize_game() 
+                self.player.hp = self.player.max_hp
+                self.active_objectives = []
+                self.state_manager.set_state(constants.STATE_GARAGE)
+                return
+                
+            # --- MISSION OBJECTIVES CHECK ---
+            if getattr(self, "active_objectives", None):
+                all_completed = True
+                for obj in self.active_objectives:
+                    obj_type = obj.get("type")
+                    if obj_type in ["survive", "extract"]:
+                        self.mission_time_elapsed += dt
+                        if self.mission_time_elapsed < obj.get("time_limit", 300):
+                            all_completed = False
+                    elif obj_type == "assassinate":
+                        boss_alive = any(getattr(b, "ai_class", "").lower() == "boss" for b in self.all_bots if b != self.player)
+                        if boss_alive:
+                            all_completed = False
+                    elif obj_type == "destroy_structures":
+                        structures_alive = any(
+                            obs.name in ["Bunker", "Barricade", "GuardTower"] 
+                            for obs in self.game_map.obstacles.values()
+                        )
+                        if structures_alive:
+                            all_completed = False
+                            
+                if all_completed:
+                    logger.info("Mission Complete!")
+                    if self.player:
+                        self.player.currencies["scrap"] += 500
+                        self.player.currencies["shards"] += 150
+                    self.active_objectives = [] # Clear so it doesn't loop
+                    self.state_manager.set_state(constants.STATE_GARAGE)
+            # -------------------------------
             
             self.update_camera()
         elif current_state == constants.STATE_HEX_EDITOR and self.hex_editor:
@@ -810,6 +903,13 @@ class Game:
                 self.player.x, self.player.y = old_x, old_y
 
     def update_camera(self):
+        # Apply zoom if configured
+        zoom = 1.0
+        if self.game_map and self.game_map.map_config:
+            zoom = self.game_map.map_config.get("camera", {}).get("zoom_level", 1.0)
+            
+        # Simplified zoom logic (just scaling the offset, real zoom needs a scaling surface)
+        # For now, we just stick to center tracking, actual rendering scaling requires surface scaling.
         self.camera_x = -self.player.x + self.screen.get_width() / 2
         self.camera_y = -self.player.y + self.screen.get_height() / 2
 
@@ -824,6 +924,8 @@ class Game:
             for bot in self.all_bots: bot.render(self.screen, self.camera_x, self.camera_y)
             self.combat_system.render(self.screen, self.camera_x, self.camera_y)
             self.draw_play_ui()
+        elif current_state == constants.STATE_GARAGE:
+            self.garage_menu.draw()
         elif current_state == constants.STATE_MENU:
             self.main_menu.draw()
         elif current_state == constants.STATE_SAVE_SLOT:
@@ -847,6 +949,8 @@ class Game:
             self.crafting_menu.draw()
         elif current_state == constants.STATE_EQUIPMENT and self.equipment_menu:
             self.equipment_menu.draw()
+        elif current_state == constants.STATE_MISSION_SELECT and self.mission_select_menu:
+            self.mission_select_menu.draw()
         elif current_state == constants.STATE_REACTOR and self.reactor_menu:
             self.reactor_menu.draw()
         elif current_state == constants.STATE_HELP:
@@ -928,7 +1032,7 @@ class Game:
                 for dy in range(-r, r + 1):
                     tx, ty = cx + dx, cy + dy
                     if 0 <= tx < self.game_map.width and 0 <= ty < self.game_map.height:
-                        if self.game_map.terrain[ty][tx] != constants.WATER and (tx, ty) not in self.game_map.obstacles:
+                        if self.game_map.terrain[ty][tx] not in constants.NON_WALKABLE_TERRAIN and (tx, ty) not in self.game_map.obstacles:
                             spawn_x = tx * constants.TILE_SIZE + constants.TILE_SIZE / 2
                             spawn_y = ty * constants.TILE_SIZE + constants.TILE_SIZE / 2
                             found_spot = True
@@ -941,6 +1045,7 @@ class Game:
         
         # Link player to UI
         self.component_viewer.player = self.player
+        self.garage_menu.player = self.player
 
         # Starter Equipment
         self.player.equip_component(create_starter_torso())
@@ -960,6 +1065,127 @@ class Game:
         self.all_bots = [self.player]
         music.play_music(biome_name=self.game_map.biome_manager.current_biome)
 
+    def load_mission(self, mission_id: str):
+        """Loads a mission from JSON map template."""
+        import json
+        
+        filepath = os.path.join(constants.DATA_DIR, "maps", f"{mission_id}.json")
+        try:
+            with open(filepath, "r") as f:
+                config = json.load(f)
+        except Exception as e:
+            logger.error(f"Failed to load mission {mission_id}: {e}")
+            return
+            
+        logger.info(f"Loaded mission config: {config.get('name', 'Unknown')}")
+        
+        # Init new map
+        self.game_map = GameMap(asset_manager=self.asset_manager, map_config=config)
+        
+        # Safe spawn player
+        cx, cy = self.game_map.width // 2, self.game_map.height // 2
+        spawn_x, spawn_y = cx * constants.TILE_SIZE, cy * constants.TILE_SIZE
+        found_spot = False
+        for r in range(0, max(self.game_map.width, self.game_map.height)):
+            for dx in range(-r, r + 1):
+                for dy in range(-r, r + 1):
+                    tx, ty = cx + dx, cy + dy
+                    if 0 <= tx < self.game_map.width and 0 <= ty < self.game_map.height:
+                        if self.game_map.terrain[ty][tx] not in constants.NON_WALKABLE_TERRAIN and (tx, ty) not in self.game_map.obstacles:
+                            spawn_x = tx * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                            spawn_y = ty * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                            found_spot = True
+                            break
+                if found_spot: break
+            if found_spot: break
+            
+        self.player.x, self.player.y = spawn_x, spawn_y
+        self.all_bots = [self.player]
+        
+        # Spawn Enemies
+        enemy_config = config.get("enemies", {})
+        density = enemy_config.get("density", 0.0)
+        composition = enemy_config.get("composition", {"grunt": 1.0})
+        gen_params = config.get("generation_params", {})
+        base_level = gen_params.get("base_enemy_level", 1)
+        biome = gen_params.get("biome", "forest")
+        
+        if density > 0:
+            total_tiles = self.game_map.width * self.game_map.height
+            # Cap enemies so it's not absurd
+            num_enemies = min(50, int(total_tiles * density))
+            
+            logger.info(f"Spawning {num_enemies} enemies for mission...")
+            import random
+            
+            for _ in range(num_enemies):
+                # Pick location
+                ex, ey = random.randint(0, self.game_map.width - 1), random.randint(0, self.game_map.height - 1)
+                # Ensure not water and not too close to player
+                if self.game_map.terrain[ey][ex] != constants.WATER:
+                    wx = ex * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                    wy = ey * constants.TILE_SIZE + constants.TILE_SIZE / 2
+                    
+                    dist = math.hypot(wx - spawn_x, wy - spawn_y)
+                    if dist > 800: # Stay away from spawn
+                        # Pick class
+                        roll = random.random()
+                        cumulative = 0.0
+                        chosen_class = "grunt"
+                        for c_name, prob in composition.items():
+                            cumulative += prob
+                            if roll <= cumulative:
+                                chosen_class = c_name
+                                break
+                                
+                        lvl = max(1, base_level + random.randint(-1, 2))
+                        enemy = Enemy(f"{chosen_class.title()} Lvl {lvl}", wx, wy, level=lvl, ai_class=chosen_class, biome=biome)
+                        enemy.asset_manager = self.asset_manager
+                        self.all_bots.append(enemy)
+
+        for obj in config.get("objectives", []):
+            if obj.get("type") == "assassinate":
+                # Find valid spot near player but not out of bounds
+                boss_x = min(self.game_map.width * constants.TILE_SIZE - 100, max(100, spawn_x + random.randint(-400, 400)))
+                boss_y = min(self.game_map.height * constants.TILE_SIZE - 100, max(100, spawn_y + random.randint(-400, 400)))
+                boss = Enemy(f"Boss Lvl 20", boss_x, boss_y, level=20, ai_class="Boss", biome=biome)
+                boss.asset_manager = self.asset_manager
+                self.all_bots.append(boss)
+                
+            elif obj.get("type") == "destroy_structures":
+                # Ensure we have enough structures
+                target_count = obj.get("count", 3)
+                current_structures = [obs for obs in self.game_map.obstacles.values() if obs.name in ["Bunker", "Barricade", "GuardTower"]]
+                structures_needed = target_count - len(current_structures)
+                
+                if structures_needed > 0:
+                    from world.game_map import Obstacle
+                    structure_types = [
+                        ("Bunker", 1000, ["explosive", "kinetic"]),
+                        ("Barricade", 400, ["explosive", "kinetic", "melee"]),
+                        ("GuardTower", 600, ["explosive", "kinetic"])
+                    ]
+                    
+                    for _ in range(structures_needed):
+                        # Find a random valid spot
+                        for attempt in range(50):
+                            rx = random.randint(0, self.game_map.width - 1)
+                            ry = random.randint(0, self.game_map.height - 1)
+                            # Ensure not spawning too close to player
+                            dist_sq = (rx * constants.TILE_SIZE - spawn_x)**2 + (ry * constants.TILE_SIZE - spawn_y)**2
+                            if dist_sq > 600**2:
+                                if self.game_map.terrain[ry][rx] not in constants.NON_WALKABLE_TERRAIN and (rx, ry) not in self.game_map.obstacles:
+                                    s_name, s_hp, s_dest = random.choice(structure_types)
+                                    new_obs = Obstacle(s_name, s_hp, s_dest)
+                                    if s_name in self.game_map.obstacle_sprites:
+                                        new_obs.sprite = self.game_map.obstacle_sprites[s_name]
+                                    self.game_map.obstacles[(rx, ry)] = new_obs
+                                    break
+
+        self.active_objectives = config.get("objectives", [])
+        self.mission_time_elapsed = 0.0
+        music.play_music(biome_name=self.game_map.biome_manager.current_biome)
+
     def open_component_viewer(self):
         if self.player:
             components = [c for c in self.player.components.values() if c]
@@ -968,10 +1194,106 @@ class Game:
 
     def draw_play_ui(self):
         if not self.player: return
-        font = self.asset_manager.get_font(None, 20)
+        font = self.asset_manager.get_font(None, 24)
+        
+        # Display Stats
         stats_text = f"HP: {int(self.player.hp)}/{int(self.player.max_hp)} | Armor: {self.player.total_armor}"
         text_surf = font.render(stats_text, True, (255, 255, 255))
         self.screen.blit(text_surf, (10, 10))
+        
+        # Display Objective
+        if hasattr(self, "active_objectives") and self.active_objectives:
+            obj = self.active_objectives[0]
+            obj_text = "Objective: "
+            target_bot = None
+            
+            if obj.get("type") in ["survive", "extract"]:
+                rem = max(0, obj.get("time_limit", 300) - self.mission_time_elapsed)
+                obj_text += f"Survive ({int(rem)}s)"
+            elif obj.get("type") == "assassinate":
+                obj_text += "Eliminate Target"
+                # Find boss for waypoint
+                for b in self.all_bots:
+                    if b != self.player and getattr(b, "ai_class", "").lower() == "boss":
+                        target_bot = b
+                        break
+            elif obj.get("type") == "destroy_structures":
+                obj_text += "Destroy Structures"
+                # Find nearest structure
+                min_dist = 999999
+                target_pos = None
+                for (ox, oy), obs in self.game_map.obstacles.items():
+                    if obs.name in ["Bunker", "Barricade", "GuardTower"]:
+                        world_ox = ox * constants.TILE_SIZE + constants.TILE_SIZE/2
+                        world_oy = oy * constants.TILE_SIZE + constants.TILE_SIZE/2
+                        dx = world_ox - self.player.x
+                        dy = world_oy - self.player.y
+                        dist = dx*dx + dy*dy
+                        if dist < min_dist:
+                            min_dist = dist
+                            target_pos = (world_ox, world_oy)
+                
+                if target_pos:
+                    class DummyTarget:
+                        def __init__(self, x, y):
+                            self.x = x
+                            self.y = y
+                    target_bot = DummyTarget(*target_pos)
+                            
+            obj_surf = font.render(obj_text, True, (255, 200, 50))
+            self.screen.blit(obj_surf, (self.screen.get_width()//2 - obj_surf.get_width()//2, 20))
+            
+            # Edge Glow Indicator
+            if target_bot:
+                dx = target_bot.x - self.player.x
+                dy = target_bot.y - self.player.y
+                real_dist = math.hypot(dx, dy)
+                
+                if real_dist > 300: # Only show if off-screen/far
+                    target_angle = math.atan2(dy, dx)
+                    
+                    if not hasattr(self, "indicator_angle") or self.indicator_angle is None:
+                        self.indicator_angle = target_angle
+                        
+                    # Tracking speed lag based on distance
+                    # Father away = slower tracking. Closer = faster tracking
+                    tracking_speed = max(0.01, min(0.3, 50.0 / real_dist))
+                    
+                    # Shortest path angular interpolation
+                    diff = (target_angle - self.indicator_angle + math.pi) % (2*math.pi) - math.pi
+                    self.indicator_angle += diff * tracking_speed
+                    
+                    angle = self.indicator_angle
+                    cx, cy = self.screen.get_width()//2, self.screen.get_height()//2
+                    dist_to_edge = min(cx, cy) - 40
+                    
+                    ix = cx + math.cos(angle) * dist_to_edge
+                    iy = cy + math.sin(angle) * dist_to_edge
+                    
+                    # Size: Closer = narrower (smaller size). Further = wider (larger size)
+                    # Maps 300 dist to ~15px, 2000 dist to ~100px
+                    size = min(100, max(15, int(real_dist / 15)))
+                    
+                    # Intensity: Closer = brighter. Further = dimmer.
+                    # Maps 300 dist to 255 intensity, 1500 dist to ~50 intensity
+                    intensity = max(40, 255 - int(max(0, real_dist - 300) / 4))
+                    
+                    # If very close, pulse it up slightly to grab attention
+                    pulse = math.sin(pygame.time.get_ticks() / 150.0) * 30 if real_dist < 600 else 0
+                    final_intensity = min(255, max(0, intensity + pulse))
+                    
+                    glow_surf = pygame.Surface((size*2.5, size*2.5), pygame.SRCALPHA)
+                    pygame.draw.circle(glow_surf, (255, 50, 50, int(final_intensity * 0.6)), (int(size*1.25), int(size*1.25)), size)
+                    
+                    # Core bright dot stays relatively smaller so the center is clear
+                    core_size = max(2, int(size * 0.2))
+                    pygame.draw.circle(glow_surf, (255, 200, 200, final_intensity), (int(size*1.25), int(size*1.25)), core_size)
+                    
+                    self.screen.blit(glow_surf, (int(ix) - int(size*1.25), int(iy) - int(size*1.25)))
+                else:
+                    self.indicator_angle = None
+            else:
+                self.indicator_angle = None
 
     def cleanup(self):
         logger.info("Shutting down game.")

@@ -1,0 +1,34 @@
+{
+    "id": "assault_01",
+    "name": "Assault on Sector 7",
+    "type": "assault",
+    "description": "Destroy the corrupted overseer structures in this sector.",
+    "lore": "Memory Log: The corruption spread faster than anticipated. We had to abandon Sector 7. Only automated defenses remain.",
+    "size": {
+        "width": 100,
+        "height": 100
+    },
+    "generation_params": {
+        "biome": "constructed",
+        "terrain_density": 0.3,
+        "obstacle_density": 0.15,
+        "base_enemy_level": 5
+    },
+    "camera": {
+        "zoom_level": 0.8
+    },
+    "objectives": [
+        {
+            "type": "destroy_structures",
+            "count": 3
+        }
+    ],
+    "enemies": {
+        "density": 0.05,
+        "composition": {
+            "grunt": 0.6,
+            "sniper": 0.2,
+            "ambusher": 0.2
+        }
+    }
+}

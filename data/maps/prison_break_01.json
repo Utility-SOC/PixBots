@@ -1,0 +1,38 @@
+{
+    "id": "prison_break_01",
+    "name": "Breakout at Core 9",
+    "type": "prison_break",
+    "description": "Breach the facility, rescue the captive units, and survive until pickup.",
+    "lore": "Memory Log: They're taking prisoners now. We don't know why. Break in, get them out, and hold the line.",
+    "size": {
+        "width": 120,
+        "height": 120
+    },
+    "generation_params": {
+        "biome": "volcano",
+        "terrain_density": 0.5,
+        "obstacle_density": 0.2,
+        "base_enemy_level": 12
+    },
+    "camera": {
+        "zoom_level": 0.9
+    },
+    "objectives": [
+        {
+            "type": "destroy_structures",
+            "count": 1
+        },
+        {
+            "type": "survive",
+            "time_limit": 180
+        }
+    ],
+    "enemies": {
+        "density": 0.06,
+        "composition": {
+            "grunt": 0.5,
+            "sniper": 0.3,
+            "ambusher": 0.2
+        }
+    }
+}

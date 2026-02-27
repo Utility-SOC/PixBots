@@ -23,7 +23,15 @@ class Obstacle:
 
 class GameMap:
     """Grid-based world with sprite rendering and procedural generation."""
-    def __init__(self, width: int, height: int, tile_size: int, asset_manager: ProceduralAssetManager, seed: int = None, biome_type: str = None):
+    def __init__(self, width: int = 100, height: int = 100, tile_size: int = constants.TILE_SIZE, asset_manager: ProceduralAssetManager = None, seed: int = None, biome_type: str = None, map_config: dict = None):
+        self.map_config = map_config
+        if map_config:
+            if "size" in map_config:
+                width = map_config["size"].get("width", width)
+                height = map_config["size"].get("height", height)
+            if "generation_params" in map_config:
+                biome_type = map_config["generation_params"].get("biome", biome_type)
+                
         self.width = width
         self.height = height
         self.tile_size = tile_size
@@ -165,6 +173,9 @@ class GameMap:
             "FrozenTree": {"hp": 180, "destructible_by": ["fire", "explosive"]},
             "LavaRock": {"hp": 350, "destructible_by": ["explosive"]},
             "ObsidianSpire": {"hp": 500, "destructible_by": ["explosive"]},
+            "Bunker": {"hp": 1000, "destructible_by": ["explosive", "kinetic"]},
+            "Barricade": {"hp": 400, "destructible_by": ["explosive", "kinetic", "melee"]},
+            "GuardTower": {"hp": 600, "destructible_by": ["explosive", "kinetic"]},
         }
         
         for y in range(self.height):
