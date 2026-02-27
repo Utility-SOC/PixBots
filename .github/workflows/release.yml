@@ -1,0 +1,52 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: PixBots-Linux
+            asset_name: PixBots-Linux-Release.zip
+          - os: windows-latest
+            artifact_name: PixBots-Windows
+            asset_name: PixBots-Windows-Release.zip
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build Executable
+      run: pyinstaller PixBots.spec
+      
+    - name: Archive artifacts (Linux)
+      if: runner.os == 'Linux'
+      run: zip -r ${{ matrix.asset_name }} dist/PixBots
+
+    - name: Archive artifacts (Windows)
+      if: runner.os == 'Windows'
+      run: Compress-Archive -Path dist/PixBots.exe -DestinationPath ${{ matrix.asset_name }} -Force
+
+    - name: Upload Release Asset
+      uses: softprops/action-gh-release@v2
+      with:
+        files: ${{ matrix.asset_name }}
+        token: ${{ secrets.GITHUB_TOKEN }}
