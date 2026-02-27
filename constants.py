@@ -1,5 +1,6 @@
 # G:\work\pixelbots\constants.py
 import os
+import sys
 
 # Core Game Info
 SCREEN_WIDTH = 1280
@@ -36,8 +37,18 @@ DAMAGE_TYPE_ENERGY = "energy"
 TILE_SIZE = 32
 
 # Directories
-ASSETS_DIR = "assets"
-DATA_DIR = "data"
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+ASSETS_DIR = get_resource_path("assets")
+DATA_DIR = get_resource_path("data")
 SAVES_DIR = "saves"
 SPRITES_DIR = os.path.join(ASSETS_DIR, "sprites")
 
