@@ -64,3 +64,23 @@ PixelBots is designed to be highly datadriven. You can freely modify the JSON fi
 - `/data/maps/`: Design new mission types and map rules.
 - `/data/components.json`: Add new equipment.
 - `/data/synergies.json`: Create new elemental combinations.
+
+## Building the Executable
+
+If you want to build a standalone executable `.exe` file for Windows:
+
+### Required Tools
+- **Python 3.10+**
+- **pip** (Python package installer)
+- **PyInstaller**: `pip install pyinstaller`
+
+### Build Instructions
+1. Install PyInstaller into your environment:
+   ```bash
+   python -m pip install pyinstaller
+   ```
+2. Build the game using the provided `PixBots.spec` file (which includes all necessary assets and data folders):
+   ```bash
+   pyinstaller PixBots.spec
+   ```
+3. The compiled executable will be located in the `dist/PixBots` directory. You can run `PixBots.exe` directly from there or package the entire folder into a `.zip` file for distribution.
